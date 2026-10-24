@@ -291,6 +291,13 @@ for axis in ('motion', 'button'):
            '\t\t\t\t\t}\n'
            '\t\t\t\t}\n'
            '#endif\n'+before)
+# Without ALLOW_HIGHDPI the UIKit drawable is in points (iPhone 14: 844x390), so the 2338x1080
+# backbuffer was shrunk to it and upscaled again by the compositor. Render to native pixels.
+change('appframework/sdlmgr.cpp', '\tflags |= SDL_WINDOW_OPENGL;\n',
+       '\tflags |= SDL_WINDOW_OPENGL;\n#if defined(SOURCE_IOS)\n\tflags |= SDL_WINDOW_ALLOW_HIGHDPI;\n#endif\n')
+change('appframework/sdlmgr.cpp', '\t\t\tSDL_GetWindowSize(m_Window, &dstxmax, &dstymax);\n',
+       '#if defined(SOURCE_IOS)\n\t\t\tSDL_GL_GetDrawableSize(m_Window, &dstxmax, &dstymax);\n#else\n'
+       '\t\t\tSDL_GetWindowSize(m_Window, &dstxmax, &dstymax);\n#endif\n')
 # GMod-style main menu: large entries sized to the screen (GMod's scheme has no MainMenuFont and
 # its MainMenu.MenuItemHeight is $WIN32-only), no server browser (no master server here).
 path='gameui/BasePanel.cpp'

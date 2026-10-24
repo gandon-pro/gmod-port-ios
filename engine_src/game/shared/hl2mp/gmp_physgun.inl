@@ -25,6 +25,10 @@ public:
 
 	CWeaponGMPPhysGun( void )
 	{
+		m_bBeam = false;
+#ifdef CLIENT_DLL
+		m_pBeam = NULL;
+#endif
 #ifndef CLIENT_DLL
 		m_flDistance = 0;
 		m_bWaitForRelease = false;
@@ -40,7 +44,18 @@ public:
 	void	Drop( const Vector &vecVelocity );
 	void	UpdateOnRemove( void );
 
+#ifdef CLIENT_DLL
+	~CWeaponGMPPhysGun( void );
+	void	OnDataChanged( DataUpdateType_t updateType );
+#endif
+
+	CNetworkVar( bool, m_bBeam );		// carrying: draw the beam to m_vecBeamEnd
+	CNetworkVector( m_vecBeamEnd );		// world position of the grabbed point
+
 private:
+#ifdef CLIENT_DLL
+	class CGMPPhysBeam *m_pBeam;
+#endif
 	void	Release( bool bFreeze );
 
 #ifndef CLIENT_DLL
@@ -60,6 +75,13 @@ private:
 IMPLEMENT_NETWORKCLASS_ALIASED( WeaponGMPPhysGun, DT_WeaponGMPPhysGun )
 
 BEGIN_NETWORK_TABLE( CWeaponGMPPhysGun, DT_WeaponGMPPhysGun )
+#ifdef CLIENT_DLL
+	RecvPropBool( RECVINFO( m_bBeam ) ),
+	RecvPropVector( RECVINFO( m_vecBeamEnd ) ),
+#else
+	SendPropBool( SENDINFO( m_bBeam ) ),
+	SendPropVector( SENDINFO( m_vecBeamEnd ), -1, SPROP_COORD ),
+#endif
 END_NETWORK_TABLE()
 
 #ifdef CLIENT_DLL
@@ -156,6 +178,7 @@ void CWeaponGMPPhysGun::UpdateOnRemove( void )
 void CWeaponGMPPhysGun::Release( bool bFreeze )
 {
 #ifndef CLIENT_DLL
+	m_bBeam = false;
 	CBaseEntity *pEntity = m_grab.GetAttached();
 	if ( !pEntity )
 		return;
@@ -192,6 +215,8 @@ void CWeaponGMPPhysGun::Grab( CBasePlayer *pOwner )
 	// Hold the object by the point that was hit, not by its center.
 	VectorITransform( tr.endpos, pEntity->EntityToWorldTransform(), m_grab.m_attachedPositionObjectSpace );
 	m_flDistance = ( tr.endpos - start ).Length();
+	m_bBeam = true;
+	m_vecBeamEnd = tr.endpos;
 }
 
 void CWeaponGMPPhysGun::Carry( CBasePlayer *pOwner )
@@ -213,6 +238,10 @@ void CWeaponGMPPhysGun::Carry( CBasePlayer *pOwner )
 	AngleMatrix( angles, attachedToWorld );
 	VectorRotate( m_grab.m_attachedPositionObjectSpace, attachedToWorld, offset );
 	m_grab.SetTargetPosition( end - offset, angles );
+
+	Vector grabbed;
+	VectorTransform( m_grab.m_attachedPositionObjectSpace, pEntity->EntityToWorldTransform(), grabbed );
+	m_vecBeamEnd = grabbed;
 }
 
 // gmp_spawn <models/...mdl> [skin]: spawn a prop where you look, resting on the surface as in
@@ -335,10 +364,153 @@ CON_COMMAND( gmp_ammo, "GModPort: gmp_ammo <Pistol|SMG1|...|all> - fill an ammo 
 #include "datacache/imdlcache.h"
 #include "ienginevgui.h"
 #include "iinput.h"
+#include "beamdraw.h"
 
 #ifdef CreateFont
 #undef CreateFont
 #endif
+
+#define GMP_PHYSBEAM_MATERIAL "sprites/physbeama"
+
+CLIENTEFFECT_REGISTER_BEGIN( PrecacheEffectGMPPhysGun )
+CLIENTEFFECT_MATERIAL( GMP_PHYSBEAM_MATERIAL )
+CLIENTEFFECT_REGISTER_END()
+
+// GMod's physgun beam: a quadratic curve from the muzzle that leaves along the aim direction and
+// bends onto the grabbed point. A translucent renderable of its own, so it is drawn with the world's
+// view and depth (the viewmodel pass has its own FOV and depth range).
+class CGMPPhysBeam : public CDefaultClientRenderable
+{
+public:
+	CGMPPhysBeam( C_WeaponGMPPhysGun *pWeapon ) : m_pWeapon( pWeapon ), m_bSnap( true )
+	{
+		m_vecOrigin.Init();
+		m_vecDrawEnd.Init();
+	}
+	~CGMPPhysBeam()
+	{
+		Hide();
+	}
+
+	void Update( void )
+	{
+		if ( !m_pWeapon->m_bBeam || m_pWeapon->IsDormant() )
+		{
+			Hide();
+			return;
+		}
+		m_vecOrigin = m_pWeapon->m_vecBeamEnd;
+		if ( m_hRenderHandle == INVALID_CLIENT_RENDER_HANDLE )
+		{
+			m_bSnap = true;
+			ClientLeafSystem()->AddRenderable( this, RENDER_GROUP_TRANSLUCENT_ENTITY );
+		}
+		else
+		{
+			ClientLeafSystem()->RenderableChanged( m_hRenderHandle );
+		}
+	}
+
+	void Hide( void )
+	{
+		if ( m_hRenderHandle != INVALID_CLIENT_RENDER_HANDLE )
+			ClientLeafSystem()->RemoveRenderable( m_hRenderHandle );
+	}
+
+	virtual const Vector &GetRenderOrigin( void ) { return m_vecOrigin; }
+	virtual const QAngle &GetRenderAngles( void ) { return vec3_angle; }
+	virtual const matrix3x4_t &RenderableToWorldTransform( void )
+	{
+		static matrix3x4_t mat;
+		SetIdentityMatrix( mat );
+		PositionMatrix( m_vecOrigin, mat );
+		return mat;
+	}
+	virtual bool ShouldDraw( void ) { return true; }
+	virtual bool IsTransparent( void ) { return true; }
+	virtual bool ShouldReceiveProjectedTextures( int flags ) { return false; }
+
+	// From the grabbed point back to the owner's eyes, so the leaf system keeps it while either
+	// end is visible.
+	virtual void GetRenderBounds( Vector &mins, Vector &maxs )
+	{
+		mins.Init( -64, -64, -64 );
+		maxs.Init( 64, 64, 64 );
+		C_BaseEntity *pOwner = m_pWeapon->GetOwner();
+		if ( pOwner )
+		{
+			const Vector toEye = pOwner->EyePosition() - m_vecOrigin;
+			for ( int i = 0; i < 3; i++ )
+			{
+				mins[i] = MIN( mins[i], toEye[i] - 64 );
+				maxs[i] = MAX( maxs[i], toEye[i] + 64 );
+			}
+		}
+	}
+
+	virtual int DrawModel( int flags )
+	{
+		C_BasePlayer *pOwner = ToBasePlayer( m_pWeapon->GetOwner() );
+		if ( !pOwner || !m_pWeapon->m_bBeam || pOwner->GetActiveWeapon() != m_pWeapon )
+			return 0;
+
+		Vector start;
+		QAngle angles;
+		if ( pOwner->IsLocalPlayer() && !C_BasePlayer::ShouldDrawLocalPlayer() )
+		{
+			C_BaseViewModel *pViewModel = pOwner->GetViewModel();
+			if ( !pViewModel )
+				return 0;
+			const int attachment = pViewModel->LookupAttachment( "muzzle" );
+			if ( !pViewModel->GetAttachment( attachment > 0 ? attachment : 1, start, angles ) )
+				return 0;
+		}
+		else
+		{
+			const int attachment = m_pWeapon->LookupAttachment( "core" );
+			if ( !m_pWeapon->GetAttachment( attachment > 0 ? attachment : 1, start, angles ) )
+				return 0;
+		}
+
+		// The server sends the grabbed point at tick rate; ease toward it so the end does not step.
+		if ( m_bSnap )
+			m_vecDrawEnd = m_pWeapon->m_vecBeamEnd;
+		else
+			m_vecDrawEnd += ( m_pWeapon->m_vecBeamEnd - m_vecDrawEnd ) * MIN( 1.0f, gpGlobals->frametime * 20.0f );
+		m_bSnap = false;
+
+		Vector forward;
+		AngleVectors( pOwner->EyeAngles(), &forward );
+		const float distance = ( m_vecDrawEnd - start ).Length();
+		const Vector control = start + forward * ( distance * 0.5f );
+
+		CMatRenderContextPtr pRenderContext( materials );
+		pRenderContext->Bind( materials->FindMaterial( GMP_PHYSBEAM_MATERIAL, TEXTURE_GROUP_CLIENT_EFFECTS ) );
+		const Vector color( 0.3f, 0.85f, 1.0f );	// GMod's default weapon colour
+		DrawBeamQuadratic( start, control, m_vecDrawEnd, 6.0f, color, gpGlobals->curtime * 2.0f );
+		return 1;
+	}
+
+private:
+	C_WeaponGMPPhysGun	*m_pWeapon;
+	Vector				m_vecOrigin;
+	Vector				m_vecDrawEnd;
+	bool				m_bSnap;
+};
+
+C_WeaponGMPPhysGun::~C_WeaponGMPPhysGun( void )
+{
+	delete m_pBeam;
+}
+
+void C_WeaponGMPPhysGun::OnDataChanged( DataUpdateType_t updateType )
+{
+	BaseClass::OnDataChanged( updateType );
+	if ( !m_pBeam && m_bBeam )
+		m_pBeam = new CGMPPhysBeam( this );
+	if ( m_pBeam )
+		m_pBeam->Update();
+}
 
 // gmp_weapnext / gmp_weapprev: the touch weapon buttons. Switches straight to the next or previous
 // weapon in slot order, without the HUD selection that invnext/invprev open and +attack confirms.

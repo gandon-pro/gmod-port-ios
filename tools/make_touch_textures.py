@@ -15,7 +15,7 @@ import zlib
 
 SIZE = 64
 BUTTONS = {
-    'gmp_jump': 'JUMP', 'gmp_duck': 'DUCK', 'gmp_fire': 'FIRE', 'gmp_fire2': 'ALT', 'gmp_use': 'USE',
+    'gmp_jump': 'JUMP', 'gmp_duck': 'DUCK', 'gmp_fire': 'FIRE', 'gmp_fire2': 'ALT', 'gmp_run': 'RUN', 'gmp_use': 'USE',
     'gmp_spawnmenu': 'Q', 'gmp_contextmenu': 'C', 'gmp_menu': 'MENU',
     'gmp_prev': '<', 'gmp_next': '>',
 }
