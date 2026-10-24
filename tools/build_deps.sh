@@ -40,6 +40,14 @@ mkdir -p "$root/build-deps/fontconfig"
     export CPPFLAGS="-I$prefix/include -I$prefix/include/freetype2"
     export LDFLAGS="-arch arm64 -isysroot $sdk -L$prefix/lib"
     export PKG_CONFIG_LIBDIR="$prefix/lib/pkgconfig"
+    # iPhoneOS provides zlib/expat but not their pkg-config .pc files. Do not
+    # let pkg-config fall back to a Homebrew macOS archive to satisfy them.
+    export FREETYPE_CFLAGS="-I$prefix/include/freetype2"
+    export FREETYPE_LIBS="-L$prefix/lib -lfreetype -lz"
+    export EXPAT_CFLAGS="-isysroot $sdk"
+    export EXPAT_LIBS="-lexpat"
+    export CC_FOR_BUILD=clang
+    export CFLAGS_FOR_BUILD=-O2
     "$font/configure" --host=aarch64-apple-darwin --prefix="$prefix" --disable-shared --enable-static --disable-docs --disable-nls
     make -j3
     make install RUN_FC_CACHE_TEST=false

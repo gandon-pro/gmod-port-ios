@@ -31,4 +31,23 @@ for path in ['vguimatsurface/MatSystemSurface.cpp','vguimatsurface/FontTextureCa
     text=text.replace('#include <Carbon/Carbon.h>','#if !defined(SOURCE_IOS)\n#include <Carbon/Carbon.h>\n#endif')
     file.write_text(text,encoding='utf-8',newline='\n')
     changes.append(path)
+path='appframework/sdlmgr.cpp'
+file=root/path
+text=file.read_text(encoding='utf-8')
+if '// GModPort iOS native GLES fallback' not in text:
+    text=text.replace('#ifdef TOGLES\n#include <EGL/egl.h>', '#if defined(TOGLES) && !defined(SOURCE_IOS)\n#include <EGL/egl.h>')
+    text=text.replace('#if defined ANDROID || defined TOGLES', '#if (defined(ANDROID) || defined(TOGLES)) && !defined(SOURCE_IOS)')
+    before='#ifdef TOGLES\n\tl_egl = dlopen("libEGL.so", RTLD_LAZY);'
+    after='''#if defined(SOURCE_IOS)
+    // GModPort iOS native GLES fallback: SDL/UIKit owns the EAGL context.
+    // Use SDL_GL_GetProcAddress, never Android libEGL.so/libGLESv3.so.
+    SET_GL_ATTR(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    SET_GL_ATTR(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SET_GL_ATTR(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#elif defined(TOGLES)
+\tl_egl = dlopen("libEGL.so", RTLD_LAZY);'''
+    assert text.count(before)==1
+    text=text.replace(before,after)
+    file.write_text(text,encoding='utf-8',newline='\n')
+    changes.append(path)
 print(json.dumps({'engine_commit':pin,'platform_files_patched':changes,'game_code_modified':False},indent=2))
