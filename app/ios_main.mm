@@ -37,6 +37,11 @@ void GModPort_OpenFolder(const char* path) {
     });
 }
 
+void GModPort_RevealFile(const char* path) {
+    NSString* file = path ? [NSString stringWithUTF8String:path] : nil;
+    if (file) GModPort_OpenFolder(file.stringByDeletingLastPathComponent.UTF8String);
+}
+
 int main(int, char**) {
     @autoreleasepool {
         if (!InstallSourceModules()) { SDL_Log("Module table: %s",gmodport::LastModuleError()); return 1; }

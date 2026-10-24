@@ -68,6 +68,12 @@ change(path, '#if defined(OSX) && !defined(SOURCE_IOS)\n\tconst char *szCommand 
 change(path, '\t\tAssert( !"execlp failed" );\n\t}\n}',
        '\t\tAssert( !"execlp failed" );\n\t}\n#endif // SOURCE_IOS: UIKit URL handler, no fork/exec\n}')
 
+signature='void\tCGLMFileMirror::OpenInEditor( bool foreground )\n{'
+change('togles/linuxwin/glmgrbasics.cpp', signature,
+       signature+'\n#if defined(SOURCE_IOS)\n\textern void GModPort_RevealFile(const char* path);\n\tGModPort_RevealFile(m_path);\n#else')
+change('togles/linuxwin/glmgrbasics.cpp', '\tsystem( temp );\n}',
+       '\tsystem( temp );\n#endif // SOURCE_IOS\n}')
+
 # OSX is retained for Darwin's low-level platform implementation. Within ToGLES,
 # however, it selects desktop CGL, NSOpenGL and obsolete Mac GL workarounds.
 # iOS uses the renderer's existing SDL/GLES paths instead. Keep the broader

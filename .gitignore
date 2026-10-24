@@ -1,6 +1,7 @@
 /build*/
 /deps/
 /artifacts/
+/.ccache/
 __pycache__/
 *.ipa
 *.pdb

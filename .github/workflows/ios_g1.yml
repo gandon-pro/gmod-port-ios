@@ -21,6 +21,11 @@ jobs:
   engine-ios:
     runs-on: macos-14
     timeout-minutes: 360
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_COMPILERCHECK: content
+      CCACHE_MAXSIZE: 512M
     steps:
       - uses: actions/checkout@v4
       - name: Record toolchain
@@ -42,7 +47,14 @@ jobs:
           cmake --build build-host --parallel 3
           ctest --test-dir build-host --output-on-failure
       - name: Install host build tools
-        run: brew install ninja cmake autoconf automake libtool gettext gperf pkg-config
+        run: brew install ninja cmake ccache autoconf automake libtool gettext gperf pkg-config
+      - uses: actions/cache/restore@v4
+        id: compiled-objects
+        with:
+          path: .ccache
+          key: ios-g1-objects-${{ runner.arch }}-${{ hashFiles('dependencies.lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ios-g1-objects-${{ runner.arch }}-${{ hashFiles('dependencies.lock.json') }}-
       - uses: actions/cache/restore@v4
         id: dependencies
         with:
@@ -65,12 +77,23 @@ jobs:
           cmake -S . -B build-ios -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 -DGMOD_BUILD_ENGINE=ON -DBUILD_TESTING=OFF \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_OBJC_COMPILER_LAUNCHER=ccache -DCMAKE_OBJCXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5
       - name: Compile all Source modules and iPhone app
+        id: engine-build
         timeout-minutes: 300
         run: |
           set -o pipefail
           cmake --build build-ios --parallel 3 -- -k 40 2>&1 | tee build-ios/compile.log
+      - name: Record compiler cache statistics
+        if: always() && steps.engine-build.outcome != 'skipped'
+        run: ccache --show-stats
+      - uses: actions/cache/save@v4
+        if: always() && steps.engine-build.outcome != 'skipped'
+        with:
+          path: .ccache
+          key: ${{ steps.compiled-objects.outputs.cache-primary-key }}
       - name: Package unsigned IPA
         run: python3 tools/package_ipa.py --app build-ios/GModPort.app --output artifacts/GModPort-unsigned.ipa
       - name: Upload IPA
