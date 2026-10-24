@@ -5,7 +5,7 @@
 //
 //          +attack   grab a physics object and carry it at the grab distance
 //          +attack2  while carrying: freeze it in place
-//          +menu     toggle the spawn menu (gmp_spawn / gmp_give / gmp_ammo on the server)
+//          +menu     toggle the spawn menu (gmp_spawn / gmp_ent / gmp_give / gmp_ammo on the server)
 //
 //=============================================================================//
 
@@ -87,6 +87,19 @@ IMPLEMENT_ACTTABLE( CWeaponGMPPhysGun );
 void CWeaponGMPPhysGun::Precache( void )
 {
 	BaseClass::Precache();
+#ifndef CLIENT_DLL
+	// gmp_ent spawns these mid-game; precache them with the map's weapons, not late.
+	static const char *const s_Items[] =
+	{
+		"item_healthkit", "item_healthvial", "item_battery", "item_suit", "item_healthcharger",
+		"item_suitcharger", "item_ammo_pistol", "item_ammo_pistol_large", "item_ammo_357",
+		"item_ammo_357_large", "item_ammo_smg1", "item_ammo_smg1_large", "item_ammo_smg1_grenade",
+		"item_ammo_ar2", "item_ammo_ar2_large", "item_ammo_ar2_altfire", "item_box_buckshot",
+		"item_ammo_crossbow", "item_rpg_round",
+	};
+	for ( int i = 0; i < ARRAYSIZE( s_Items ); i++ )
+		UTIL_PrecacheOther( s_Items[i] );
+#endif
 }
 
 void CWeaponGMPPhysGun::ItemPostFrame( void )
@@ -242,6 +255,42 @@ CON_COMMAND( gmp_spawn, "GModPort: gmp_spawn <models/...mdl> [skin] - spawn a pr
 	Msg( "gmp_spawn: %s at %.0f %.0f %.0f\n", pModel, origin.x, origin.y, origin.z );
 }
 
+// gmp_ent <item_...>: the spawn menu's Entities tab. Real HL2 items (pickups, wall chargers), not
+// the prop models the spawnlists have; chargers go flat on the wall you look at.
+CON_COMMAND( gmp_ent, "GModPort: gmp_ent <item_...> - spawn an HL2 item where you look" )
+{
+	CBasePlayer *pPlayer = UTIL_GetCommandClient();
+	if ( !pPlayer || args.ArgC() < 2 || Q_strnicmp( args[1], "item_", 5 ) )
+		return;
+	Vector start = pPlayer->EyePosition();
+	Vector forward;
+	pPlayer->EyeVectors( &forward );
+	trace_t tr;
+	UTIL_TraceLine( start, start + forward * 1024, MASK_SOLID, pPlayer, COLLISION_GROUP_NONE, &tr );
+
+	CBaseEntity *pEnt = CreateEntityByName( args[1] );
+	if ( !pEnt )
+		return;
+	const bool bWall = Q_stristr( args[1], "charger" ) != NULL;
+	QAngle angles( 0, pPlayer->EyeAngles().y + 180, 0 );
+	if ( bWall && fabsf( tr.plane.normal.z ) < 0.7f )
+		VectorAngles( tr.plane.normal, angles );
+	pEnt->SetAbsOrigin( bWall ? tr.endpos : tr.endpos + tr.plane.normal * 8 );
+	pEnt->SetAbsAngles( angles );
+	if ( DispatchSpawn( pEnt ) < 0 )
+	{
+		UTIL_Remove( pEnt );
+		return;
+	}
+	pEnt->Activate();
+	if ( !bWall )
+	{
+		Vector origin = tr.endpos - tr.plane.normal * pEnt->CollisionProp()->OBBMins().z;
+		pEnt->Teleport( &origin, NULL, NULL );
+	}
+	Msg( "gmp_ent: %s\n", args[1] );
+}
+
 // gmp_give <weapon_...>: the spawn menu's Weapons tab. Gives the weapon (once) plus ammo and
 // switches to it.
 CON_COMMAND( gmp_give, "GModPort: gmp_give <weapon_...> - give a weapon from the spawn menu" )
@@ -311,6 +360,33 @@ struct GMPSpawnList
 
 static CUtlVector<GMPSpawnList *> g_GMPSpawnLists;	// tree order: every list followed by its children
 static CUtlVector<GMPSpawnItem> g_GMPWeapons;
+static CUtlVector<GMPSpawnItem> g_GMPEntities;
+
+// Entities tab: gmp_ent <class>; a NULL class starts a header.
+static const struct { const char *cls, *name, *model; } s_GMPEntityTable[] =
+{
+	{ NULL, "Half-Life 2: Items", NULL },
+	{ "item_healthkit", "Health Kit", "models/items/healthkit.mdl" },
+	{ "item_healthvial", "Health Vial", "models/healthvial.mdl" },
+	{ "item_battery", "Suit Battery", "models/items/battery.mdl" },
+	{ "item_suit", "HEV Suit", "models/items/hevsuit.mdl" },
+	{ "item_healthcharger", "Health Charger", "models/props_combine/health_charger001.mdl" },
+	{ "item_suitcharger", "Suit Charger", "models/props_combine/suit_charger001.mdl" },
+	{ NULL, "Half-Life 2: Ammo", NULL },
+	{ "item_ammo_pistol", "Pistol Ammo", "models/items/boxsrounds.mdl" },
+	{ "item_ammo_pistol_large", "Pistol Ammo (Large)", "models/items/boxsrounds.mdl" },
+	{ "item_ammo_357", ".357 Ammo", "models/items/357ammo.mdl" },
+	{ "item_ammo_357_large", ".357 Ammo (Large)", "models/items/357ammobox.mdl" },
+	{ "item_ammo_smg1", "SMG Ammo", "models/items/boxmrounds.mdl" },
+	{ "item_ammo_smg1_large", "SMG Ammo (Large)", "models/items/boxmrounds.mdl" },
+	{ "item_ammo_smg1_grenade", "SMG Grenade", "models/items/ar2_grenade.mdl" },
+	{ "item_ammo_ar2", "Pulse Ammo", "models/items/combine_rifle_cartridge01.mdl" },
+	{ "item_ammo_ar2_large", "Pulse Ammo (Large)", "models/items/combine_rifle_cartridge01.mdl" },
+	{ "item_ammo_ar2_altfire", "Combine Ball", "models/items/combine_rifle_ammo01.mdl" },
+	{ "item_box_buckshot", "Shotgun Ammo", "models/items/boxbuckshot.mdl" },
+	{ "item_ammo_crossbow", "Crossbow Bolts", "models/items/crossbowrounds.mdl" },
+	{ "item_rpg_round", "RPG Rocket", "models/weapons/w_missile_closed.mdl" },
+};
 
 static const struct { const char *cls, *name, *model; } s_GMPWeaponTable[] =
 {
@@ -439,6 +515,20 @@ static void GMP_LoadSpawnMenu( void )
 		item.command = cmd;
 		item.skin = 0;
 		g_GMPWeapons.AddToTail( item );
+	}
+	for ( int i = 0; i < ARRAYSIZE( s_GMPEntityTable ); i++ )
+	{
+		GMPSpawnItem item;
+		item.text = s_GMPEntityTable[i].name;
+		item.skin = 0;
+		if ( s_GMPEntityTable[i].cls )
+		{
+			item.model = s_GMPEntityTable[i].model;
+			char cmd[64];
+			Q_snprintf( cmd, sizeof( cmd ), "gmp_ent %s", s_GMPEntityTable[i].cls );
+			item.command = cmd;
+		}
+		g_GMPEntities.AddToTail( item );
 	}
 	header.text = "Ammo";
 	g_GMPWeapons.AddToTail( header );
@@ -932,7 +1022,7 @@ public:
 	}
 
 private:
-	static const char *const s_Tabs[2];
+	static const char *const s_Tabs[3];
 
 	void SelectTab( int tab )
 	{
@@ -940,7 +1030,7 @@ private:
 		if ( tab == 0 )
 			OnSpawnListSelected( m_pLists->Selected() );
 		else
-			m_pGrid->SetItems( &g_GMPWeapons );
+			m_pGrid->SetItems( tab == 1 ? &g_GMPEntities : &g_GMPWeapons );
 		InvalidateLayout();
 		Repaint();
 	}
@@ -971,7 +1061,7 @@ private:
 	int m_nTab, m_nX0, m_nX1, m_nY0, m_nY1, m_nTabTall;
 };
 
-const char *const CGMPSpawnMenu::s_Tabs[2] = { "Spawnlists", "Weapons" };
+const char *const CGMPSpawnMenu::s_Tabs[3] = { "Spawnlists", "Entities", "Weapons" };
 
 static vgui::DHANDLE<CGMPSpawnMenu> g_hGMPSpawnMenu;
 
