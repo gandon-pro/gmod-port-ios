@@ -334,7 +334,7 @@ int main(int, char**) {
         // emulation would add every finger as mouse look and a MOUSE1 click (Android disables it too).
         SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
         std::vector<std::string> args={"GModPort","-basedir",documents.UTF8String,"-game","garrysmod","-novid","-insecure","-console","-condebug","-dev","2","-w",width,"-h","1080",
-                                       "+touch_enable","1","+exec","touch_default.cfg","+map","gm_construct"};
+                                       "+touch_enable","1","+exec","touch_default.cfg"};  // starts at the main menu
         std::vector<char*> argv;
         for (auto& arg:args) argv.push_back(&arg[0]);
         // Source resolves -game and gameinfo search paths relative to the working directory.
