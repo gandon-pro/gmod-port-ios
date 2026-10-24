@@ -14,15 +14,15 @@ CreateInterfaceFn Sys_GetFactory(CSysModule* handle) {
 }
 CreateInterfaceFn Sys_GetFactory(const char* name) { return gmodport::GetFactory(name); }
 bool Sys_LoadInterface(const char* name, const char* version, CSysModule** outModule, void** outInterface) {
-    if (!outModule || !outInterface) return false;
-    *outModule = nullptr;
+    if (!outInterface) return false;
+    if (outModule) *outModule = nullptr;
     *outInterface = nullptr;
     auto* module = Sys_LoadModule(name);
     const auto factory = Sys_GetFactory(module);
     if (!factory) { Sys_UnloadModule(module); return false; }
     void* object = factory(version, nullptr);
     if (!object) { Sys_UnloadModule(module); return false; }
-    *outModule = module;
+    if (outModule) *outModule = module;
     *outInterface = object;
     return true;
 }

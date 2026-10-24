@@ -14,6 +14,12 @@ int main() {
     assert(object && *static_cast<int*>(object) == 11);
     auto* client = Sys_LoadModule("libclient.so");
     assert(client && *static_cast<int*>(Sys_GetFactory(client)("SharedTestInterface001", nullptr)) == 22);
+    // Source permits omitting the returned module handle. The interface keeps
+    // its load reference until the caller explicitly releases that module.
+    object = nullptr;
+    assert(Sys_LoadInterface("client", "SharedTestInterface001", nullptr, &object));
+    assert(object && *static_cast<int*>(object) == 22);
+    Sys_UnloadModule(Sys_LoadModule("client", SYS_NOLOAD));
     assert(Sys_GetFactory("engine") == Sys_GetFactory(engine));
     Sys_UnloadModule(engine);
     assert(!Sys_GetFactory("engine"));

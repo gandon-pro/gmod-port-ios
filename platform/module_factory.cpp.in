@@ -18,4 +18,4 @@ void* CreateInterfaceInternal(const char* name, int* status) {
     return nullptr;
 }
 void* CreateInterface(const char* name, int* status) { return CreateInterfaceInternal(name, status); }
-CreateInterfaceFn Sys_GetFactoryThis() { return &CreateInterface; }
+CreateInterfaceFn Sys_GetFactoryThis() { return &CreateInterfaceInternal; }
