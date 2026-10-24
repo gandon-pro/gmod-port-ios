@@ -59,7 +59,7 @@ change('vgui2/vgui_controls/FileOpenDialog.cpp',
 # however, it selects desktop CGL, NSOpenGL and obsolete Mac GL workarounds.
 # iOS uses the renderer's existing SDL/GLES paths instead. Keep the broader
 # POSIX selection (BSD || OSX || LINUX) and the GLX exclusion unchanged.
-for folder in ['public/togles', 'togles']:
+for folder in ['public/togles', 'public/togl', 'togles']:
     for file in sorted((root/folder).rglob('*')):
         if file.suffix not in ('.h', '.cpp', '.inl'): continue
         text=file.read_text(encoding='utf-8')
