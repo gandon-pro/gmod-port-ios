@@ -74,7 +74,12 @@ if args.isolate_modules:
         for dep in project.get('use',[]):visit(dep)
         return result
     isolate=args.platform.parent/'tools/isolate_module.py'
-    for p in projects:
+    # Static initializers run in link order. On desktop tier0/vstdlib are dylibs loaded
+    # before everything else; engine globals (e.g. CLog in sv_log.cpp) call CommandLine()
+    # during static init, so the shared runtime modules must be linked first.
+    first=['tier0','vstdlib','togl','steam_api']
+    ordered=sorted(projects,key=lambda p:first.index(p['target']) if p['target'] in first else len(first))
+    for p in ordered:
         if p['kind']!='module':continue
         name=p['target']
         target=ident(name)
