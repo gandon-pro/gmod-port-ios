@@ -90,6 +90,8 @@ for path, call in [
     ('engine/sv_steamauth.cpp', 'SteamAPI_SetBreakpadAppID( GetSteamInfIDVersionInfo().ServerAppID );'),
     ('engine/sys_dll2.cpp', 'SteamAPI_SetBreakpadAppID( AppId + 1 );')]:
     change(path, call, '#if defined(USE_BREAKPAD_HANDLER)\n'+call+'\n#endif')
+bp='\t\tSteamAPI_SetBreakpadAppID( BreakpadAppId );\n\t\tSteamAPI_UseBreakpadCrashHandler( pchVersion, __DATE__, __TIME__, bFullMemoryDump, pvMiniDumpContext, pfnPreMinidumpCallback );\n'
+change('engine/sys_dll2.cpp', bp, '#if defined(USE_BREAKPAD_HANDLER)\n'+bp+'#endif\n')
 change('engine/sys_mainwind.cpp', '#ifdef OSX\n\tid nsWindow',
        '#if defined(SOURCE_IOS)\n\treturn (void*)pInfo.info.uikit.window;\n#elif defined(OSX)\n\tid nsWindow')
 change('launcher/launcher.cpp', '\t\t\t\tsystem( szOpenLine );',
