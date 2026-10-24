@@ -97,6 +97,10 @@ change('engine/sys_mainwind.cpp', '#ifdef OSX\n\tid nsWindow',
        '#if defined(SOURCE_IOS)\n\treturn (void*)pInfo.info.uikit.window;\n#elif defined(OSX)\n\tid nsWindow')
 change('launcher/launcher.cpp', '\t\t\t\tsystem( szOpenLine );',
        '#if defined(SOURCE_IOS)\n\t\t\t\tSDL_OpenURL(szCmd);\n#else\n\t\t\t\tsystem( szOpenLine );\n#endif')
+# UIKit SDL loads OpenGLES.framework itself and rejects any other library path
+# ("OpenGL library already loaded"); NULL means "use the loaded one".
+change('appframework/sdlmgr.cpp', '#if defined( TOGLES )\n\t\tif (SDL_GL_LoadLibrary("libGLESv3.so") == -1)',
+       '#if defined( TOGLES ) && !defined( SOURCE_IOS )\n\t\tif (SDL_GL_LoadLibrary("libGLESv3.so") == -1)')
 # The sandbox cannot create /tmp/source_engine_*.lock and iOS runs one instance anyway.
 change('launcher/launcher.cpp', '#ifdef ANDROID\n\treturn true;\n#elif defined (LINUX)',
        '#if defined(ANDROID) || defined(SOURCE_IOS)\n\treturn true;\n#elif defined (LINUX)')
