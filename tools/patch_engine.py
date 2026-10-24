@@ -55,6 +55,19 @@ change('vgui2/vgui_controls/FileOpenDialog.cpp',
        '#elif defined( OSX )\n\tchar szCmd[ MAX_PATH * 2];',
        '#elif defined(SOURCE_IOS)\n\tGModPort_OpenFolder(pCurrentDirectory);\n#elif defined( OSX )\n\tchar szCmd[ MAX_PATH * 2];')
 
+path='vgui2/src/system_posix.cpp'
+file=root/path
+text=file.read_text(encoding='utf-8')
+updated=text.replace('#ifdef OSX', '#if defined(OSX) && !defined(SOURCE_IOS)')
+if updated != text:
+    file.write_text(updated,encoding='utf-8',newline='\n')
+    changes.append(path)
+change(path, '#include "SDL_error.h"', '#include "SDL_error.h"\n#include "SDL_misc.h"')
+change(path, '#if defined(OSX) && !defined(SOURCE_IOS)\n\tconst char *szCommand = "open";',
+       '#if defined(SOURCE_IOS)\n\tif (SDL_OpenURL(file) != 0)\n\t\tWarning("Open URL failed: %s\\n", SDL_GetError());\n#else\n#if defined(OSX) && !defined(SOURCE_IOS)\n\tconst char *szCommand = "open";')
+change(path, '\t\tAssert( !"execlp failed" );\n\t}\n}',
+       '\t\tAssert( !"execlp failed" );\n\t}\n#endif // SOURCE_IOS: UIKit URL handler, no fork/exec\n}')
+
 # OSX is retained for Darwin's low-level platform implementation. Within ToGLES,
 # however, it selects desktop CGL, NSOpenGL and obsolete Mac GL workarounds.
 # iOS uses the renderer's existing SDL/GLES paths instead. Keep the broader
