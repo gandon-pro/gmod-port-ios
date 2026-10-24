@@ -115,8 +115,18 @@ int main(int, char**) {
             if (![fm copyItemAtPath:copy[0] toPath:copy[1] error:nil])
                 SDL_Log("Cannot install %s", copy[1].UTF8String);
         }
-        if (![[NSFileManager defaultManager] fileExistsAtPath:[game stringByAppendingPathComponent:@"maps/gm_construct.bsp"]])
-            SDL_Log("gm_construct may be inside a VPK; content must be imported into %s", game.UTF8String);
+        // gameinfo.txt mounts all content through Documents/gmcontent: the bundle's content/
+        // (tools/embed_content.py) or, without it, Documents itself (folders copied via Files).
+        // The bundle path changes on every reinstall, so the link is recreated each launch.
+        NSString* link = [documents stringByAppendingPathComponent:@"gmcontent"];
+        NSString* embedded = [bundle stringByAppendingPathComponent:@"content"];
+        BOOL hasEmbedded = [fm fileExistsAtPath:[embedded stringByAppendingPathComponent:@"garrysmod/garrysmod_dir.vpk"]];
+        [fm removeItemAtPath:link error:nil];
+        if (![fm createSymbolicLinkAtPath:link withDestinationPath:hasEmbedded ? embedded : @"." error:nil])
+            SDL_Log("Cannot link %s", link.UTF8String);
+        SDL_Log("Content: %s", hasEmbedded ? embedded.UTF8String : "Documents (copied via Files)");
+        if (![fm fileExistsAtPath:[link stringByAppendingPathComponent:@"garrysmod/garrysmod_dir.vpk"]])
+            SDL_Log("No GMod content: garrysmod/garrysmod_dir.vpk missing in %s", link.UTF8String);
         std::vector<std::string> args={"GModPort","-basedir",documents.UTF8String,"-game","garrysmod","-novid","-insecure","-console","-condebug","-dev","2",
                                        "+touch_enable","1","+exec","touch_default.cfg","+map","gm_construct"};
         std::vector<char*> argv;

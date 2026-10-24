@@ -8,22 +8,24 @@
 	{
 		SteamAppId	4000
 		// Paths without |gameinfo_path| are relative to -basedir (the app's Documents).
-		// Layout copied from the user's GMod install: garrysmod/, sourceengine/, platform/.
+		// gmcontent is a link made at launch: to the IPA's embedded content/
+		// (tools/embed_content.py) or to Documents when folders were copied via Files.
 		SearchPaths
 		{
 			mod+mod_write+default_write_path	|gameinfo_path|.
 			game+game_write		|gameinfo_path|.
 			gamebin			|gameinfo_path|bin
 
-			game	garrysmod/garrysmod.vpk
-			game	garrysmod/fallbacks.vpk
-			game	sourceengine/hl2_textures.vpk
-			game	sourceengine/hl2_sound_vo_english.vpk
-			game	sourceengine/hl2_sound_misc.vpk
-			game	sourceengine/hl2_misc.vpk
-			game	sourceengine
-			platform	platform/platform_misc.vpk
-			platform	platform
+			game	gmcontent/garrysmod/garrysmod.vpk
+			game	gmcontent/garrysmod/fallbacks.vpk
+			game	gmcontent/garrysmod
+			game	gmcontent/sourceengine/hl2_textures.vpk
+			game	gmcontent/sourceengine/hl2_sound_vo_english.vpk
+			game	gmcontent/sourceengine/hl2_sound_misc.vpk
+			game	gmcontent/sourceengine/hl2_misc.vpk
+			game	gmcontent/sourceengine
+			platform	gmcontent/platform/platform_misc.vpk
+			platform	gmcontent/platform
 		}
 	}
 }

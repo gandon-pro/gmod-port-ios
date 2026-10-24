@@ -44,7 +44,16 @@ EXPOSE_INTERFACE_FN и общим helper-архивом проходит; пол
 три папки из установленного GMod (`steamapps/common/GarrysMod`): `garrysmod`, `sourceengine`,
 `platform`. gameinfo.txt, touch_default.cfg и текстуры кнопок приложение при каждом запуске
 ставит поверх скопированных (свой gameinfo из GMod на телефоне не работает).
-Бандл не содержит gm_construct и ресурсов GMod.
+CI-бандл не содержит gm_construct и ресурсов GMod.
+
+Вариант без копирования: встроить контент в IPA локально (только для личной установки,
+контент не попадает в CI/GitHub):
+
+    python tools/embed_content.py GModPort-unsigned.ipa "E:/SteamLibrary/steamapps/common/GarrysMod" GModPort-content.ipa
+
+Скрипт кладёт `garrysmod`, `sourceengine` (только hl2_* VPK из gameinfo) и `platform` в
+`GModPort.app/content/`. Приложение линкует `Documents/gmcontent` на встроенный контент,
+а без него — на сам Documents, поэтому оба варианта используют один gameinfo.txt.
 Конфигурация запуска задаёт `-basedir Documents -game garrysmod +map gm_construct`.
 Для G1 используются stock hl2mp client/server. Это ещё не GMod sandbox.
 Q/C кнопки отправляют будущие GMod menu-команды; stock hl2mp spawnmenu не реализует.
