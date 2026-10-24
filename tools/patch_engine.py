@@ -112,6 +112,10 @@ change('launcher/launcher.cpp', '\t\tchar const *pOverrideDir = CommandLine()->C
 # user in the engine checks for NULL, so leave it out of the app system group.
 change('launcher/launcher.cpp', '\t\t{ "video_services" DLL_EXT_STRING,  VIDEO_SERVICES_INTERFACE_VERSION },\n',
        '#if !defined(SOURCE_IOS)\n\t\t{ "video_services" DLL_EXT_STRING,  VIDEO_SERVICES_INTERFACE_VERSION },\n#endif\n')
+# serverbrowser/friends are separate dlls that iOS does not build (static modules only),
+# and a missing one is a fatal Error(); GameUI ignores the return value.
+change('gameui/VGuiSystemModuleLoader.cpp', '\tif ( IsX360() )\n\t{\n\t\t// not valid for 360\n\t\treturn false;\n\t}\n\n\tbool bSuccess = true;\n\n\t// load platform menu',
+       '\tif ( IsX360() )\n\t{\n\t\t// not valid for 360\n\t\treturn false;\n\t}\n#if defined(SOURCE_IOS)\n\treturn false;\n#endif\n\n\tbool bSuccess = true;\n\n\t// load platform menu')
 # Apple GLES stops at 3.0: no glDrawRangeElementsBaseVertex (ES 3.2). FlushDrawStates
 # already receives the base vertex, so fold it into the vertex attrib pointer offsets
 # and draw with plain glDrawRangeElements (indices are then relative to the base).
