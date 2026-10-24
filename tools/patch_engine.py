@@ -295,9 +295,20 @@ for axis in ('motion', 'button'):
 # backbuffer was shrunk to it and upscaled again by the compositor. Render to native pixels.
 change('appframework/sdlmgr.cpp', '\tflags |= SDL_WINDOW_OPENGL;\n',
        '\tflags |= SDL_WINDOW_OPENGL;\n#if defined(SOURCE_IOS)\n\tflags |= SDL_WINDOW_ALLOW_HIGHDPI;\n#endif\n')
+# The blit target is UIKit's color renderbuffer: take its real pixel size (ios_main.mm) rather than
+# SDL's window/drawable size, and keep the engine's leftover scissor rect off the blit.
 change('appframework/sdlmgr.cpp', '\t\t\tSDL_GetWindowSize(m_Window, &dstxmax, &dstymax);\n',
-       '#if defined(SOURCE_IOS)\n\t\t\tSDL_GL_GetDrawableSize(m_Window, &dstxmax, &dstymax);\n#else\n'
+       '#if defined(SOURCE_IOS)\n\t\t\tGModPort_DrawableSize(&dstxmax, &dstymax);\n#else\n'
        '\t\t\tSDL_GetWindowSize(m_Window, &dstxmax, &dstymax);\n#endif\n')
+change('appframework/sdlmgr.cpp', '#include "SDL_opengl.h"\n',
+       '#include "SDL_opengl.h"\n#if defined(SOURCE_IOS)\nextern void GModPort_DrawableSize(int* w, int* h);\n#endif\n')
+blit=('#ifdef TOGLES\n\t\t\tglBlitFramebuffer(\n'
+      '\t\t\t\t\t/* src min and maxes xy xy */ srcxmin, srcymin,\t\t\t\tsrcxmax,srcymax,\n'
+      '\t\t\t\t\t/* dst min and maxes xy xy */ dstxmin, dstymax,\t\t\t\tdstxmax,dstymin,\t\t// note yflip here\n'
+      '\t\t\t\t\tGL_COLOR_BUFFER_BIT, filter );\n')
+change('appframework/sdlmgr.cpp', blit,
+       '#if defined(SOURCE_IOS)\n\t\t\tconst GLboolean scissor = glIsEnabled( GL_SCISSOR_TEST );\n\t\t\tglDisable( GL_SCISSOR_TEST );\n#endif\n'
+       +blit+'#if defined(SOURCE_IOS)\n\t\t\tif ( scissor )\n\t\t\t\tglEnable( GL_SCISSOR_TEST );\n#endif\n')
 # GMod-style main menu: large entries sized to the screen (GMod's scheme has no MainMenuFont and
 # its MainMenu.MenuItemHeight is $WIN32-only), no server browser (no master server here).
 path='gameui/BasePanel.cpp'

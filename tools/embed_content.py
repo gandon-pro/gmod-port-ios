@@ -13,7 +13,9 @@ gmpk format (little endian):
   then one zlib stream of records: u16 path length, UTF-8 path, u64 size, data;
   a record with path length 0 ends the stream.
 
-usage: python tools/embed_content.py <GModPort-unsigned.ipa> <GarrysMod dir> <out.ipa>
+usage: python tools/embed_content.py <GModPort-unsigned.ipa> <GarrysMod dir> <out.ipa> [--icon-only]
+--icon-only writes no gmcontent.gmpk: a small update IPA that keeps the content already unpacked
+on the phone but still has the GMod icon (the bare CI IPA has none).
 """
 import argparse
 import io
@@ -123,6 +125,7 @@ def main():
     parser.add_argument('--fonts', type=Path, help='linux_fonts dir (default: ../Half-Life 2/' + LINUX_FONTS + ')')
     parser.add_argument('--shaders', type=Path, help='vcs_match.py --pack output (default: ../out/portshaders)')
     parser.add_argument('--level', type=int, default=6, help='zlib level (1 fastest, 9 smallest)')
+    parser.add_argument('--icon-only', action='store_true', help='add the icon only, no content pack')
     args = parser.parse_args()
     for top in ('garrysmod', 'sourceengine', 'platform'):
         if not (args.gmod / top).is_dir():
@@ -130,14 +133,16 @@ def main():
     if not (args.gmod / 'garrysmod/garrysmod_dir.vpk').is_file():
         sys.exit('garrysmod_dir.vpk not found: not a GarrysMod install')
     files = []
-    for top in ('garrysmod', 'sourceengine', 'platform'):
+    for top in () if args.icon_only else ('garrysmod', 'sourceengine', 'platform'):
         for path in sorted((args.gmod / top).rglob('*')):
             rel = path.relative_to(args.gmod).as_posix()
             if path.is_file() and wanted(rel):
                 files.append((path, rel))
     fonts = args.fonts or args.gmod.parent / 'Half-Life 2' / LINUX_FONTS
     have = {rel for _, rel in files}
-    if fonts.is_dir():
+    if args.icon_only:
+        pass
+    elif fonts.is_dir():
         for path in sorted(fonts.glob('*.ttf')):
             rel = f'{LINUX_FONTS}/{path.name}'
             if rel not in have and not path.name.startswith('noto'):
@@ -145,7 +150,9 @@ def main():
     else:
         print(f'warning: no linux_fonts at {fonts}; vgui text will not render')
     shaders = args.shaders or Path(__file__).resolve().parents[2] / 'out' / PORTSHADERS
-    if (shaders / 'shaders/fxc').is_dir():
+    if args.icon_only:
+        pass
+    elif (shaders / 'shaders/fxc').is_dir():
         # shaders/fxc from vcs_match.py --pack, materials/gmp from make_port_assets.py
         for path in sorted(shaders.rglob('*')):
             if path.is_file():
@@ -176,22 +183,23 @@ def main():
             entry.compress_type = zipfile.ZIP_DEFLATED
             entry.external_attr = 0o644 << 16
             dst.writestr(entry, data)
-        entry = zipfile.ZipInfo(PAK, date_time=(2026, 1, 1, 0, 0, 0))
-        entry.compress_type = zipfile.ZIP_STORED  # payload is already deflated
-        entry.external_attr = 0o644 << 16
-        with dst.open(entry, 'w', force_zip64=True) as w:
-            w.write(b'GMPK1\0\0\0' + struct.pack('<QI', total, len(files)) + uuid.uuid4().bytes)
-            z = zlib.compressobj(args.level)
-            done = 0
-            for path, rel in files:
-                name = rel.encode()
-                w.write(z.compress(struct.pack('<H', len(name)) + name + struct.pack('<Q', path.stat().st_size)))
-                with open(path, 'rb') as f:
-                    while chunk := f.read(4 << 20):
-                        w.write(z.compress(chunk))
-                        done += len(chunk)
-                        print(f'\r{done * 100 // total:3d}%', end='', flush=True)
-            w.write(z.compress(struct.pack('<H', 0)) + z.flush())
+        if not args.icon_only:
+            entry = zipfile.ZipInfo(PAK, date_time=(2026, 1, 1, 0, 0, 0))
+            entry.compress_type = zipfile.ZIP_STORED  # payload is already deflated
+            entry.external_attr = 0o644 << 16
+            with dst.open(entry, 'w', force_zip64=True) as w:
+                w.write(b'GMPK1\0\0\0' + struct.pack('<QI', total, len(files)) + uuid.uuid4().bytes)
+                z = zlib.compressobj(args.level)
+                done = 0
+                for path, rel in files:
+                    name = rel.encode()
+                    w.write(z.compress(struct.pack('<H', len(name)) + name + struct.pack('<Q', path.stat().st_size)))
+                    with open(path, 'rb') as f:
+                        while chunk := f.read(4 << 20):
+                            w.write(z.compress(chunk))
+                            done += len(chunk)
+                            print(f'\r{done * 100 // total:3d}%', end='', flush=True)
+                w.write(z.compress(struct.pack('<H', 0)) + z.flush())
     print()
     tmp.replace(args.output)
     print(f'wrote {args.output} ({args.output.stat().st_size / 2**30:.2f} GiB)')

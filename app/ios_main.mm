@@ -33,6 +33,32 @@ static void BindIOSFramebuffer(GLenum target, GLuint framebuffer) {
     glBindFramebuffer(target, framebuffer);
 }
 
+// Pixel size of UIKit's color renderbuffer, the target of sdlmgr's ShowPixels blit. SDL's window
+// size is in points and its drawable size may not follow the HighDPI renderbuffer.
+void GModPort_DrawableSize(int* w, int* h) {
+    *w = *h = 0;
+    SDL_SysWMinfo info{};
+    SDL_VERSION(&info.version);
+    SDL_Window* window = SDL_GL_GetCurrentWindow();
+    if (window && SDL_GetWindowWMInfo(window, &info) && info.subsystem == SDL_SYSWM_UIKIT && info.info.uikit.colorbuffer) {
+        GLint previous = 0;
+        glGetIntegerv(GL_RENDERBUFFER_BINDING, &previous);
+        glBindRenderbuffer(GL_RENDERBUFFER, info.info.uikit.colorbuffer);
+        glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_WIDTH, w);
+        glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_HEIGHT, h);
+        glBindRenderbuffer(GL_RENDERBUFFER, previous);
+    }
+    if (*w <= 0 || *h <= 0)
+        SDL_GL_GetDrawableSize(window, w, h);
+    static int loggedW, loggedH;
+    if (*w != loggedW || *h != loggedH) {
+        int pw = 0, ph = 0, dw = 0, dh = 0;
+        if (window) { SDL_GetWindowSize(window, &pw, &ph); SDL_GL_GetDrawableSize(window, &dw, &dh); }
+        SDL_Log("Blit target %dx%d px (window %dx%d pt, SDL drawable %dx%d)", *w, *h, pw, ph, dw, dh);
+        loggedW = *w; loggedH = *h;
+    }
+}
+
 void* GModPort_GLProcAddress(const char* name) {
     if (!std::strcmp(name, "glBindFramebuffer") || !std::strcmp(name, "glBindFramebufferEXT"))
         return reinterpret_cast<void*>(&BindIOSFramebuffer);
