@@ -5,8 +5,8 @@
 
 ## Текущий статус
 
-- G1 **не готов**: сборочная цель и статические фабрики добавлены; полная компиляция,
-  конфликты остальных символов и запуск gm_construct должны быть проверены.
+- G1: все Source-модули компилируются и линкуются в один arm64-бинарник, CI выпускает
+  `GModPort-unsigned.ipa`. **На телефоне ещё не запускался** — критерий G1 не подтверждён.
 - Renderer bring-up использует разрешённый заданием native OpenGLES fallback.
   **ANGLE/Metal ещё не подключён**, его наличие не имитируется.
 - G2: статические библиотеки Windows x64 и iPhone arm64 собраны. На Windows и
@@ -40,9 +40,11 @@ EXPOSE_INTERFACE_FN и общим helper-архивом проходит; пол
 
 ## Контент и проверка на телефоне
 
-После установки и переподписи IPA через Sideloadly/AltStore импортировать собственный
-контент в Files → GModPort → garrysmod и sourceengine. Путь игры:
-Documents/garrysmod. Бандл не содержит gm_construct и ресурсов GMod.
+После установки и переподписи IPA через Sideloadly/AltStore скопировать в Files → GModPort
+три папки из установленного GMod (`steamapps/common/GarrysMod`): `garrysmod`, `sourceengine`,
+`platform`. gameinfo.txt, touch_default.cfg и текстуры кнопок приложение при каждом запуске
+ставит поверх скопированных (свой gameinfo из GMod на телефоне не работает).
+Бандл не содержит gm_construct и ресурсов GMod.
 Конфигурация запуска задаёт `-basedir Documents -game garrysmod +map gm_construct`.
 Для G1 используются stock hl2mp client/server. Это ещё не GMod sandbox.
 Q/C кнопки отправляют будущие GMod menu-команды; stock hl2mp spawnmenu не реализует.

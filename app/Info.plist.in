@@ -8,6 +8,11 @@
 <key>CFBundleShortVersionString</key><string>0.1</string>
 <key>CFBundleVersion</key><string>@GMOD_BUILD_NUMBER@</string>
 <key>LSRequiresIPhoneOS</key><true/>
+<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+<key>CFBundleSupportedPlatforms</key><array><string>iPhoneOS</string></array>
+<key>DTPlatformName</key><string>iphoneos</string>
+<key>MinimumOSVersion</key><string>15.0</string>
+<key>UIDeviceFamily</key><array><integer>1</integer><integer>2</integer></array>
 <key>NSMicrophoneUsageDescription</key><string>Voice chat uses the microphone when you enable recording in the game.</string>
 <key>UIRequiresFullScreen</key><true/>
 <key>UIFileSharingEnabled</key><true/>
