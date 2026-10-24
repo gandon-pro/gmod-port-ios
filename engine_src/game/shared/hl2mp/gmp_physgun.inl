@@ -334,10 +334,43 @@ CON_COMMAND( gmp_ammo, "GModPort: gmp_ammo <Pistol|SMG1|...|all> - fill an ammo 
 #include "matsys_controls/mdlpanel.h"
 #include "datacache/imdlcache.h"
 #include "ienginevgui.h"
+#include "iinput.h"
 
 #ifdef CreateFont
 #undef CreateFont
 #endif
+
+// gmp_weapnext / gmp_weapprev: the touch weapon buttons. Switches straight to the next or previous
+// weapon in slot order, without the HUD selection that invnext/invprev open and +attack confirms.
+static void GMP_CycleWeapon( int dir )
+{
+	C_BasePlayer *pPlayer = C_BasePlayer::GetLocalPlayer();
+	if ( !pPlayer || !pPlayer->IsAlive() )
+		return;
+	CUtlVector<C_BaseCombatWeapon *> weapons;
+	for ( int i = 0; i < pPlayer->WeaponCount(); i++ )
+	{
+		C_BaseCombatWeapon *pWeapon = pPlayer->GetWeapon( i );
+		if ( !pWeapon || !pWeapon->CanBeSelected() )
+			continue;
+		const int key = pWeapon->GetSlot() * 100 + pWeapon->GetPosition();
+		int at = 0;
+		while ( at < weapons.Count() && weapons[at]->GetSlot() * 100 + weapons[at]->GetPosition() <= key )
+			at++;
+		weapons.InsertBefore( at, pWeapon );
+	}
+	if ( weapons.Count() == 0 )
+		return;
+	const int current = weapons.Find( pPlayer->GetActiveWeapon() );
+	const int next = current < 0 ? 0 : ( current + dir + weapons.Count() ) % weapons.Count();
+	if ( weapons[next] != pPlayer->GetActiveWeapon() )
+	{
+		::input->MakeWeaponSelection( weapons[next] );
+		pPlayer->EmitSound( "Player.WeaponSelectionMoveSlot" );
+	}
+}
+CON_COMMAND( gmp_weapnext, "GModPort: switch to the next weapon" ) { GMP_CycleWeapon( 1 ); }
+CON_COMMAND( gmp_weapprev, "GModPort: switch to the previous weapon" ) { GMP_CycleWeapon( -1 ); }
 
 // GMod-style spawn menu: GMod's own spawnlists (settings/spawnlist*/ *.txt) on the left, a grid
 // of live model icons on the right, a Weapons tab. Drag scrolls, a tap spawns.

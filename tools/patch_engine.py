@@ -364,4 +364,17 @@ change('game/server/hl2/hl2_player.cpp', before,
        '\tif ( flPower >= 0.0f )\n'
        '\t\treturn true;\n'
        '#endif\n')
+# GModPort: fullscreen video modes must be in this list; ios_main.mm asks for 1080 lines at the screen's
+# aspect (2338x1080 on iPhone 14), which no stock entry has, so FindVideoMode fell back to another
+# mode and the picture was stretched. Add the -w/-h mode itself.
+change('appframework/glmdisplaydb_linuxwin.inl',
+       '                        m_modes->AddToTail( new GLMDisplayMode( rect.w, rect.h, 0 ) );\n                }\n        }\n',
+       '                        m_modes->AddToTail( new GLMDisplayMode( rect.w, rect.h, 0 ) );\n                }\n        }\n'
+       '#if defined(SOURCE_IOS)\n'
+       '        {\n'
+       '                const int w = CommandLine()->ParmValue( "-w", 0 ), h = CommandLine()->ParmValue( "-h", 0 );\n'
+       '                if ( w > 0 && h > 0 )\n'
+       '                        m_modes->AddToTail( new GLMDisplayMode( w, h, 0 ) );\n'
+       '        }\n'
+       '#endif\n')
 print(json.dumps({'engine_commit':pin,'platform_files_patched':changes,'game_code_modified':False},indent=2))
