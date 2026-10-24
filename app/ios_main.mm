@@ -72,11 +72,29 @@ int main(int, char**) {
         [[NSFileManager defaultManager] createDirectoryAtPath:game withIntermediateDirectories:YES attributes:nil error:nil];
         NSString* cfg = [game stringByAppendingPathComponent:@"cfg"];
         [[NSFileManager defaultManager] createDirectoryAtPath:cfg withIntermediateDirectories:YES attributes:nil error:nil];
-        for (NSString* filename in @[@"gameinfo.txt", @"touch_default.cfg"]) {
-            NSString* source = [[NSBundle mainBundle] pathForResource:filename ofType:nil];
-            NSString* destination = [filename hasSuffix:@".cfg"] ? [cfg stringByAppendingPathComponent:filename] : [game stringByAppendingPathComponent:filename];
-            if (![[NSFileManager defaultManager] fileExistsAtPath:destination])
-                [[NSFileManager defaultManager] copyItemAtPath:source toPath:destination error:nil];
+        // Bundled files always win: a GMod garrysmod/ folder copied in via Files brings its own
+        // gameinfo.txt, which mounts paths that do not exist on the phone.
+        NSFileManager* fm = [NSFileManager defaultManager];
+        NSString* touchDir = [game stringByAppendingPathComponent:@"materials/vgui/touch"];
+        [fm createDirectoryAtPath:touchDir withIntermediateDirectories:YES attributes:nil error:nil];
+        // CMake may place MACOSX_PACKAGE_LOCATION Resources at the bundle root or in Resources/.
+        NSString* bundle = [NSBundle mainBundle].resourcePath;
+        NSString* (^resource)(NSString*) = ^NSString*(NSString* name) {
+            NSString* flat = [bundle stringByAppendingPathComponent:name];
+            return [fm fileExistsAtPath:flat] ? flat : [[bundle stringByAppendingPathComponent:@"Resources"] stringByAppendingPathComponent:name];
+        };
+        NSMutableArray<NSArray<NSString*>*>* copies = [NSMutableArray arrayWithArray:@[
+            @[resource(@"gameinfo.txt"), [game stringByAppendingPathComponent:@"gameinfo.txt"]],
+            @[resource(@"touch_default.cfg"), [cfg stringByAppendingPathComponent:@"touch_default.cfg"]]]];
+        NSString* touchSource = resource(@"touch");
+        for (NSString* name in [fm contentsOfDirectoryAtPath:touchSource error:nil])
+            if ([name.pathExtension isEqualToString:@"vtf"])
+                [copies addObject:@[[touchSource stringByAppendingPathComponent:name], [touchDir stringByAppendingPathComponent:name]]];
+        if (copies.count == 2) SDL_Log("No touch textures in bundle at %s", touchSource.UTF8String);
+        for (NSArray<NSString*>* copy in copies) {
+            [fm removeItemAtPath:copy[1] error:nil];
+            if (![fm copyItemAtPath:copy[0] toPath:copy[1] error:nil])
+                SDL_Log("Cannot install %s", copy[1].UTF8String);
         }
         if (![[NSFileManager defaultManager] fileExistsAtPath:[game stringByAppendingPathComponent:@"maps/gm_construct.bsp"]])
             SDL_Log("gm_construct may be inside a VPK; content must be imported into %s", game.UTF8String);

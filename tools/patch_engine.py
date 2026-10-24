@@ -16,7 +16,7 @@ pin='ed8209cc35c61fbd8ddff8480962a01c981eef2f'
 assert subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()==pin
 changes=[]
 def change(path,before,after):
-    assert not path.startswith('game/')
+    assert '/gmod/' not in path  # Aero's GMod layer is never patched here
     file=root/path
     text=file.read_text(encoding='utf-8')
     if after in text:return
@@ -78,6 +78,7 @@ change('togles/linuxwin/glmgrbasics.cpp', '\tsystem( temp );\n}',
 # desktop hardware mixer controls. Select those same SDL/generic branches.
 path='engine/audio/voice.cpp'
 change(path, '#elif defined( OSX )', '#elif defined(OSX) && !defined(SOURCE_IOS)')
+change('engine/audio/snd_win.cpp', '#elif defined(OSX)\n', '#elif defined(OSX) && !defined(SOURCE_IOS)\n')
 change(path, '#ifdef OSX', '#if defined(OSX) && !defined(SOURCE_IOS)')
 path='engine/audio/voice_mixer_controls_openal.cpp'
 change(path, '#ifdef OSX', '#if defined(OSX) && !defined(SOURCE_IOS)')
@@ -145,4 +146,12 @@ for file in files:
         after=marker+'\n#if defined(SOURCE_IOS)\n#include <GL/gl.h>\n#include <GL/glext.h>\n#else\n'+before+'\n#endif'
         file.write_text(text.replace(before,after),encoding='utf-8',newline='\n')
         changes.append(file.relative_to(root).as_posix())
+# hl2mp MOTD uses vgui/gfx/vgui/* art that GMod content lacks: it covers the
+# screen with error textures on join (seen on the Windows dev build). Opt-in.
+path='game/server/hl2mp/hl2mp_client.cpp'
+change(path, 'void FinishClientPutInServer( CHL2MP_Player *pPlayer )\n{',
+       'static ConVar sv_gmp_show_motd( "sv_gmp_show_motd", "0", 0, "GModPort: show the hl2mp MOTD panel on join" );\n\n'
+       'void FinishClientPutInServer( CHL2MP_Player *pPlayer )\n{')
+change(path, '\tconst ConVar *hostname = cvar->FindVar( "hostname" );',
+       '\tif ( !sv_gmp_show_motd.GetBool() )\n\t\treturn;\n\n\tconst ConVar *hostname = cvar->FindVar( "hostname" );')
 print(json.dumps({'engine_commit':pin,'platform_files_patched':changes,'game_code_modified':False},indent=2))
