@@ -86,6 +86,17 @@ change('engine/sys_dll.cpp', '#include <Carbon/Carbon.h>',
        '#if defined(SOURCE_IOS)\n#include <malloc/malloc.h>\n#else\n#include <Carbon/Carbon.h>\n#endif')
 change('engine/sys_dll.cpp', '#elif OSX\n\tstruct mstats memstats = mstats( );',
        '#elif defined(SOURCE_IOS)\n\tmalloc_statistics_t memstats;\n\tmalloc_zone_statistics(malloc_default_zone(), &memstats);\n\tMsg("Allocated %.2f MB, Used: %.2f MB, #mallocs = %lu\\n",\n\t\tmemstats.size_allocated / (1024.0 * 1024.0),\n\t\tmemstats.size_in_use / (1024.0 * 1024.0), (unsigned long)memstats.blocks_in_use);\n#elif OSX\n\tstruct mstats memstats = mstats( );')
+for path, call in [
+    ('engine/sv_steamauth.cpp', 'SteamAPI_SetBreakpadAppID( GetSteamInfIDVersionInfo().ServerAppID );'),
+    ('engine/sys_dll2.cpp', 'SteamAPI_SetBreakpadAppID( AppId + 1 );')]:
+    change(path, call, '#if defined(USE_BREAKPAD_HANDLER)\n'+call+'\n#endif')
+change('engine/sys_mainwind.cpp', '#ifdef OSX\n\tid nsWindow',
+       '#if defined(SOURCE_IOS)\n\treturn (void*)pInfo.info.uikit.window;\n#elif defined(OSX)\n\tid nsWindow')
+change('launcher/launcher.cpp', '\t\t\t\tsystem( szOpenLine );',
+       '#if defined(SOURCE_IOS)\n\t\t\t\tSDL_OpenURL(szCmd);\n#else\n\t\t\t\tsystem( szOpenLine );\n#endif')
+change('materialsystem/shaderapidx9/shaderdevicedx8.cpp',
+       '#include <Carbon/Carbon.h>',
+       '#if !defined(SOURCE_IOS)\n#include <Carbon/Carbon.h>\n#endif')
 
 # OSX is retained for Darwin's low-level platform implementation. Within ToGLES,
 # however, it selects desktop CGL, NSOpenGL and obsolete Mac GL workarounds.

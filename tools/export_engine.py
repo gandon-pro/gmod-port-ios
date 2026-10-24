@@ -84,7 +84,7 @@ def main():
             INCLUDES_SDL2=[str(args.sdl_include.resolve())],
             DEFINES=['POSIX=1','_POSIX=1','PLATFORM_POSIX=1','OSX=1','_OSX=1',
                      'SOURCE_IOS=1','PLATFORM_64BITS=1','GNUC=1','TOGLES=1',
-                     'DX_TO_GL_ABSTRACTION=1','USE_SDL=1','DISABLE_STEAM=1','NO_STEAM=1',
+                     'DX_TO_GL_ABSTRACTION=1','USE_SDL=1',
                      'NO_HOOK_MALLOC=1','NO_MEMOVERRIDE_NEW_DELETE=1','TIER1_STATIC_LIB=1',
                      'NDEBUG=1','_DLL_EXT=.a','GIT_COMMIT_HASH="ed8209cc35c61fbd8ddff8480962a01c981eef2f"'])
     result=[]
