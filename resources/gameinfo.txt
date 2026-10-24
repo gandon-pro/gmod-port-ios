@@ -16,6 +16,8 @@
 			game+game_write		|gameinfo_path|.
 			gamebin			|gameinfo_path|bin
 
+			// Shader pack matching this engine's combos; must win over the VPKs' shaders/fxc.
+			game	gmcontent/portshaders
 			game	gmcontent/garrysmod/garrysmod.vpk
 			game	gmcontent/garrysmod/fallbacks.vpk
 			game	gmcontent/garrysmod
@@ -26,6 +28,8 @@
 			game	gmcontent/sourceengine
 			platform	gmcontent/platform/platform_misc.vpk
 			platform	gmcontent/platform
+			// The POSIX font loader opens "platform/resource/linux_fonts/*.ttf" relative to a search path.
+			platform	gmcontent
 		}
 	}
 }

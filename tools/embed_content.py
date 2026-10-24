@@ -30,6 +30,9 @@ SOURCEENGINE_VPKS = ('hl2_textures', 'hl2_sound_vo_english', 'hl2_sound_misc', '
 # GMod's Windows platform/ has no linux_fonts, which the POSIX vgui surface loads by
 # path (DejaVu/Liberation, free licenses); take them from a sibling Half-Life 2 install.
 LINUX_FONTS = 'platform/resource/linux_fonts'
+# GMod's .vcs do not match this engine's shader combo layout (HUD/fonts draw nothing); a pack
+# of matching .vcs picked from the GMod/HL2 VPKs by gmod_port/tools/vcs_match.py --pack.
+PORTSHADERS = 'portshaders'
 SKIP_GARRYSMOD = {'cache', 'download', 'downloads', 'logs', 'screenshots', 'videos', 'gameinfo.txt',
                   'cfg/config.cfg', 'console.log'}
 
@@ -56,6 +59,7 @@ def main():
     parser.add_argument('gmod', type=Path)
     parser.add_argument('output', type=Path)
     parser.add_argument('--fonts', type=Path, help='linux_fonts dir (default: ../Half-Life 2/' + LINUX_FONTS + ')')
+    parser.add_argument('--shaders', type=Path, help='vcs_match.py --pack output (default: ../out/portshaders)')
     parser.add_argument('--level', type=int, default=6, help='zlib level (1 fastest, 9 smallest)')
     args = parser.parse_args()
     for top in ('garrysmod', 'sourceengine', 'platform'):
@@ -78,6 +82,12 @@ def main():
                 files.append((path, rel))
     else:
         print(f'warning: no linux_fonts at {fonts}; vgui text will not render')
+    shaders = args.shaders or Path(__file__).resolve().parents[2] / 'out' / PORTSHADERS
+    if (shaders / 'shaders/fxc').is_dir():
+        for path in sorted((shaders / 'shaders/fxc').glob('*.vcs')):
+            files.append((path, f'{PORTSHADERS}/shaders/fxc/{path.name}'))
+    else:
+        print(f'warning: no shader pack at {shaders}; HUD and text will not render')
     total = sum(p.stat().st_size for p, _ in files)
     print(f'{len(files)} files, {total / 2**30:.2f} GiB uncompressed')
     tmp = args.output.with_suffix('.tmp')

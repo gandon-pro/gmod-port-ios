@@ -197,4 +197,63 @@ change(path, 'void FinishClientPutInServer( CHL2MP_Player *pPlayer )\n{',
        'void FinishClientPutInServer( CHL2MP_Player *pPlayer )\n{')
 change(path, '\tconst ConVar *hostname = cvar->FindVar( "hostname" );',
        '\tif ( !sv_gmp_show_motd.GetBool() )\n\t\treturn;\n\n\tconst ConVar *hostname = cvar->FindVar( "hostname" );')
+# GMod's sky materials use the g_sky shader (+ SkyPaint proxy driven by env_skypaint). Their
+# $basetexture is a painted fallback that the stock sky shader draws.
+change('materialsystem/stdshaders/sky_dx9.cpp', '\nEND_SHADER\n',
+       "\nEND_SHADER\n\n// GModPort: GMod's procedural sky shader falls back to its painted $basetexture.\n"
+       'DEFINE_FALLBACK_SHADER( g_sky, Sky_DX9 )\n')
+proxy='EXPOSE_INTERFACE( CDummyMaterialProxy, IMaterialProxy, "Dummy" IMATERIAL_PROXY_INTERFACE_VERSION );'
+change('game/client/dummyproxy.cpp', proxy, proxy+'''
+
+// GModPort: GMod's skybox/painted* materials (g_sky) are driven by env_skypaint. Until that
+// entity exists they draw their fallback $basetexture, so the proxy does nothing.
+class CSkyPaintProxy : public IMaterialProxy
+{
+public:
+	virtual bool Init( IMaterial *pMaterial, KeyValues *pKeyValues ) { return true; }
+	virtual void OnBind( void *pC_BaseEntity ) {}
+	virtual void Release( void ) { delete this; }
+	virtual IMaterial *GetMaterial() { return NULL; }
+};
+EXPOSE_INTERFACE( CSkyPaintProxy, IMaterialProxy, "SkyPaint" IMATERIAL_PROXY_INTERFACE_VERSION );''')
+
+# weapon_physgun + test spawn menu (engine_src/game/shared/hl2mp/gmp_physgun.inl), included
+# into weapon_physcannon.cpp for CGrabController. It replaces the HL2MP default weapon, whose
+# scripts GMod content does not have.
+src=Path(__file__).resolve().parent.parent/'engine_src'
+for file in sorted(src.rglob('*')):
+    if file.is_file():
+        target=root/file.relative_to(src)
+        data=file.read_bytes()
+        if not target.exists() or target.read_bytes()!=data:
+            target.write_bytes(data)
+            changes.append(target.relative_to(root).as_posix())
+change('game/shared/hl2mp/weapon_physcannon.cpp',
+       'DECLARE_CLIENT_EFFECT( "PhyscannonImpact", CallbackPhyscannonImpact );\n\n#endif\n',
+       'DECLARE_CLIENT_EFFECT( "PhyscannonImpact", CallbackPhyscannonImpact );\n\n#endif\n\n'
+       '// GModPort: weapon_physgun and the test spawn menu reuse CGrabController.\n#include "gmp_physgun.inl"\n')
+path='game/server/hl2mp/hl2mp_player.cpp'
+change(path, '\tGiveNamedItem( "weapon_physcannon" );\n\n\tconst char *szDefaultWeaponName',
+       '\tGiveNamedItem( "weapon_physcannon" );\n\tGiveNamedItem( "weapon_physgun" );\n\n\tconst char *szDefaultWeaponName')
+change(path, '\t\tWeapon_Switch( Weapon_OwnsThisType( "weapon_physcannon" ) );\n\t}\n}',
+       '\t\tWeapon_Switch( Weapon_OwnsThisType( "weapon_physgun" ) );\n\t}\n}')
+change('game/client/hl2mp/c_hl2mp_player.cpp', 'static ConVar cl_defaultweapon( "cl_defaultweapon", "weapon_physcannon"',
+       'static ConVar cl_defaultweapon( "cl_defaultweapon", "weapon_physgun"')
+# 1920x1080 backbuffer (-w/-h) is blitted onto a window measured in points; SDL touch->mouse
+# events arrive in points too, so vgui needs them scaled to the backbuffer. Windowed mode
+# leaves m_flMouseXScale at 1.0.
+for axis in ('motion', 'button'):
+    before='\t\t\t\ttheEvent.m_MousePos[0] = event.%s.x * m_flMouseXScale;' % axis
+    change('appframework/sdlmgr.cpp', before,
+           '#if defined(SOURCE_IOS)\n'
+           '\t\t\t\t{\n'
+           '\t\t\t\t\tint ww = 0, wh = 0;\n'
+           '\t\t\t\t\tSDL_GetWindowSize( m_Window, &ww, &wh );\n'
+           '\t\t\t\t\tif ( ww > 0 && wh > 0 && m_WindowWidth > 0 && m_WindowHeight > 0 )\n'
+           '\t\t\t\t\t{\n'
+           '\t\t\t\t\t\tm_flMouseXScale = ( float )m_WindowWidth / ( float )ww;\n'
+           '\t\t\t\t\t\tm_flMouseYScale = ( float )m_WindowHeight / ( float )wh;\n'
+           '\t\t\t\t\t}\n'
+           '\t\t\t\t}\n'
+           '#endif\n'+before)
 print(json.dumps({'engine_commit':pin,'platform_files_patched':changes,'game_code_modified':False},indent=2))

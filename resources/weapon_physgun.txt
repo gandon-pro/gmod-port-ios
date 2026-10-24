@@ -1,0 +1,21 @@
+// GModPort: weapon script for weapon_physgun (game/shared/hl2mp/gmp_physgun.inl).
+// GMod defines its weapons in Lua, so its content has no scripts/weapon_*.txt.
+WeaponData
+{
+	"printname"		"Physics Gun"
+	"viewmodel"		"models/weapons/v_superphyscannon.mdl"
+	"playermodel"	"models/weapons/w_physics.mdl"
+	"anim_prefix"	"physgun"
+	"bucket"		"0"
+	"bucket_position"	"0"
+	"clip_size"		"-1"
+	"clip2_size"	"-1"
+	"default_clip"	"-1"
+	"default_clip2"	"-1"
+	"primary_ammo"	"None"
+	"secondary_ammo"	"None"
+	"weight"		"100"
+	"autoswitchto"	"1"
+	"autoswitchfrom"	"0"
+	"item_flags"	"0"
+}

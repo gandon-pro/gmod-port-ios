@@ -221,6 +221,8 @@ int main(int, char**) {
         NSString* game = [documents stringByAppendingPathComponent:@"garrysmod"];
         [[NSFileManager defaultManager] createDirectoryAtPath:game withIntermediateDirectories:YES attributes:nil error:nil];
         NSString* cfg = [game stringByAppendingPathComponent:@"cfg"];
+        NSString* scripts = [game stringByAppendingPathComponent:@"scripts"];
+        [[NSFileManager defaultManager] createDirectoryAtPath:scripts withIntermediateDirectories:YES attributes:nil error:nil];
         [[NSFileManager defaultManager] createDirectoryAtPath:cfg withIntermediateDirectories:YES attributes:nil error:nil];
         // Bundled files always win: a GMod garrysmod/ folder copied in via Files brings its own
         // gameinfo.txt, which mounts paths that do not exist on the phone.
@@ -235,12 +237,13 @@ int main(int, char**) {
         };
         NSMutableArray<NSArray<NSString*>*>* copies = [NSMutableArray arrayWithArray:@[
             @[resource(@"gameinfo.txt"), [game stringByAppendingPathComponent:@"gameinfo.txt"]],
-            @[resource(@"touch_default.cfg"), [cfg stringByAppendingPathComponent:@"touch_default.cfg"]]]];
+            @[resource(@"touch_default.cfg"), [cfg stringByAppendingPathComponent:@"touch_default.cfg"]],
+            @[resource(@"weapon_physgun.txt"), [scripts stringByAppendingPathComponent:@"weapon_physgun.txt"]]]];
         NSString* touchSource = resource(@"touch");
         for (NSString* name in [fm contentsOfDirectoryAtPath:touchSource error:nil])
             if ([name.pathExtension isEqualToString:@"vtf"])
                 [copies addObject:@[[touchSource stringByAppendingPathComponent:name], [touchDir stringByAppendingPathComponent:name]]];
-        if (copies.count == 2) SDL_Log("No touch textures in bundle at %s", touchSource.UTF8String);
+        if (copies.count == 3) SDL_Log("No touch textures in bundle at %s", touchSource.UTF8String);
         for (NSArray<NSString*>* copy in copies) {
             [fm removeItemAtPath:copy[1] error:nil];
             if (![fm copyItemAtPath:copy[0] toPath:copy[1] error:nil])
@@ -291,7 +294,7 @@ int main(int, char**) {
         }
         if (![fm fileExistsAtPath:[contentDir stringByAppendingPathComponent:@"garrysmod/garrysmod_dir.vpk"]])
             SDL_Log("No GMod content: garrysmod/garrysmod_dir.vpk missing in %s", contentDir.UTF8String);
-        std::vector<std::string> args={"GModPort","-basedir",documents.UTF8String,"-game","garrysmod","-novid","-insecure","-console","-condebug","-dev","2",
+        std::vector<std::string> args={"GModPort","-basedir",documents.UTF8String,"-game","garrysmod","-novid","-insecure","-console","-condebug","-dev","2","-w","1920","-h","1080",
                                        "+touch_enable","1","+exec","touch_default.cfg","+map","gm_construct"};
         std::vector<char*> argv;
         for (auto& arg:args) argv.push_back(&arg[0]);
