@@ -6,10 +6,12 @@ import subprocess
 ROOT=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser()
 parser.add_argument('--engine-only',action='store_true')
+parser.add_argument('--only',action='append',default=[])
 args=parser.parse_args()
 lock=json.loads((ROOT/'dependencies.lock.json').read_text())
 for name,spec in lock.items():
     if args.engine_only and name!='engine':continue
+    if args.only and name not in args.only:continue
     folder=ROOT/'deps'/name
     created=not folder.exists()
     if created:subprocess.run(['git','clone','--filter=blob:none','--no-checkout',spec['url'],str(folder)],check=True)

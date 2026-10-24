@@ -15,11 +15,12 @@ build() {
     cmake --install "$root/build-deps/$name"
 }
 third="$root/deps/engine/thirdparty"
+python3 "$root/tools/patch_thirdparty.py" "$third"
 build sdl "$root/deps/sdl" -DSDL_SHARED=OFF -DSDL_STATIC=ON -DSDL_TEST=OFF
 build jpeg "$third/libjpeg" -DENABLE_SHARED=OFF -DENABLE_STATIC=ON -DWITH_SIMD=OFF -DWITH_TURBOJPEG=OFF
 build png "$third/libpng" -DPNG_SHARED=OFF -DPNG_STATIC=ON -DPNG_TESTS=OFF
 build freetype "$third/freetype" -DFT_DISABLE_HARFBUZZ=ON -DFT_DISABLE_BZIP2=ON -DFT_DISABLE_BROTLI=ON -DFT_DISABLE_PNG=ON
-build curl "$third/curl" -DBUILD_CURL_EXE=OFF -DBUILD_TESTING=OFF -DCURL_USE_OPENSSL=OFF -DCMAKE_USE_OPENSSL=OFF -DCMAKE_USE_SECTRANSP=ON -DCURL_DISABLE_LDAP=ON -DCURL_DISABLE_LDAPS=ON
+build curl "$third/curl" -DBUILD_CURL_EXE=OFF -DBUILD_TESTING=OFF -DCMAKE_USE_OPENSSL=OFF -DCMAKE_USE_SECTRANSP=ON -DCURL_DISABLE_LDAP=ON -DCURL_DISABLE_LDAPS=ON -DHAVE_POLL_FINE=0 -DHAVE_POLL_FINE_EXITCODE=1 -DCURL_CA_BUNDLE=none -DCURL_CA_PATH=none
 build openal "$third/openal-soft" -DLIBTYPE=STATIC -DALSOFT_UTILS=OFF -DALSOFT_EXAMPLES=OFF -DALSOFT_TESTS=OFF -DALSOFT_REQUIRE_COREAUDIO=ON
 # Fontconfig is still used by the fork's FreeType font backend. Cross-compile
 # the library; no macOS/Homebrew library is linked into the iOS application.

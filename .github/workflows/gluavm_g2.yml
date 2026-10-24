@@ -1,0 +1,54 @@
+name: G2 GLua VM
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'gluavm/**'
+      - 'dependencies.lock.json'
+      - 'tools/bootstrap.py'
+      - '.github/workflows/gluavm_g2.yml'
+permissions:
+  contents: read
+concurrency:
+  group: gmod-g2-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  vm-ios:
+    runs-on: macos-14
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record toolchain
+        run: |
+          xcode-select -p
+          xcodebuild -version
+      - name: Fetch pinned LuaJIT and Facepunch Lua corpus
+        run: python3 tools/bootstrap.py --only luajit --only garrysmod
+      - name: Cross-compile interpreter for iPhone arm64
+        run: bash gluavm/build_ios.sh
+      - name: Build native host VM for C API verification
+        run: |
+          make -C deps/luajit clean
+          MACOSX_DEPLOYMENT_TARGET=11.0 make -C deps/luajit -j3 DEFAULT_CC=clang \
+            BUILDMODE=static XCFLAGS="-DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI"
+          clang++ -std=c++17 -Ideps/luajit/src gluavm/verify_vm.cpp \
+            deps/luajit/src/libluajit.a -o build-gluavm/gluavm_verify
+      - name: Test GLua syntax and control flow
+        run: |
+          set -o pipefail
+          python3 gluavm/prepare_checks.py --garrysmod deps/garrysmod --out build-gluavm/checks
+          build-gluavm/gluavm_verify --run-manifest build-gluavm/checks/tests.txt | tee build-gluavm/checks/macos-tests.jsonl
+      - name: Compile every includes and sandbox file with luaL_loadfile
+        run: |
+          set -o pipefail
+          build-gluavm/gluavm_verify --compile-manifest build-gluavm/checks/syntax.txt | tee build-gluavm/checks/macos-corpus.jsonl
+      - name: Upload iOS static VM and per-file logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gluavm-ios-arm64-and-logs
+          path: |
+            build-gluavm/ios-arm64/
+            build-gluavm/checks/*.jsonl
+          if-no-files-found: ignore

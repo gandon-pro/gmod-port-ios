@@ -1,0 +1,5 @@
+assert(type(jit) == "table")
+assert(jit.status() == false)
+assert(not pcall(require, "ffi"))
+local f = assert(loadstring("return 6 * 7"))
+assert(f() == 42)

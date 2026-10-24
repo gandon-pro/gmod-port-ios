@@ -3,6 +3,15 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths:
+      - 'app/**'
+      - 'platform/**'
+      - 'cmake/**'
+      - 'resources/**'
+      - 'tools/**'
+      - 'CMakeLists.txt'
+      - 'dependencies.lock.json'
+      - '.github/workflows/ios_g1.yml'
 permissions:
   contents: read
 concurrency:
@@ -29,14 +38,21 @@ jobs:
         run: python3 tools/bootstrap.py
       - name: Install host build tools
         run: brew install ninja cmake autoconf automake libtool gettext gperf pkg-config
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         id: dependencies
         with:
           path: build-deps/install
-          key: ios-g1-deps-v1-${{ runner.arch }}-${{ hashFiles('dependencies.lock.json', 'tools/build_deps.sh') }}
+          key: ios-g1-deps-v1-${{ runner.arch }}-${{ hashFiles('dependencies.lock.json', 'tools/build_deps.sh', 'tools/patch_thirdparty.py') }}
       - name: Cross-compile iPhone dependencies
+        id: build-dependencies
         if: steps.dependencies.outputs.cache-hit != 'true'
         run: bash tools/build_deps.sh
+      - name: Save completed dependencies before compiling the engine
+        if: steps.build-dependencies.outcome == 'success' && steps.dependencies.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: build-deps/install
+          key: ${{ steps.dependencies.outputs.cache-primary-key }}
       - name: Apply iOS platform patch
         run: python3 tools/patch_engine.py deps/engine
       - name: Configure static Source engine

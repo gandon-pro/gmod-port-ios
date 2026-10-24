@@ -1,0 +1,5 @@
+assert(!false)
+assert(!nil)
+assert(!0 == false)
+assert(!"" == false)
+assert(!!123)

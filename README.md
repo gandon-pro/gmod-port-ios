@@ -9,7 +9,8 @@
   конфликты остальных символов и запуск gm_construct должны быть проверены.
 - Renderer bring-up использует разрешённый заданием native OpenGLES fallback.
   **ANGLE/Metal ещё не подключён**, его наличие не имитируется.
-- G2 пока не начат: сначала bring-up G1. Непатченный LuaJIT не называется GLua VM.
+- G2 Windows: статическая библиотека собрана; 9 runtime-тестов и 215 файлов
+  includes/sandbox проходят. iPhone arm64 build проверяется отдельным CI G2.
 - Код Aero в game/client/gmod, game/server/gmod и game/shared/gmod включается в
   source lists при наличии, но не изменяется средствами этого проекта.
 
