@@ -295,6 +295,8 @@ int main(int, char**) {
                                        "+touch_enable","1","+exec","touch_default.cfg","+map","gm_construct"};
         std::vector<char*> argv;
         for (auto& arg:args) argv.push_back(&arg[0]);
+        // Source resolves -game and gameinfo search paths relative to the working directory.
+        chdir(documents.UTF8String);
         return LauncherMain(static_cast<int>(argv.size()),argv.data());
     }
 }

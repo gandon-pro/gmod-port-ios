@@ -104,6 +104,10 @@ change('appframework/sdlmgr.cpp', '#if defined( TOGLES )\n\t\tif (SDL_GL_LoadLib
 # The sandbox cannot create /tmp/source_engine_*.lock and iOS runs one instance anyway.
 change('launcher/launcher.cpp', '#ifdef ANDROID\n\treturn true;\n#elif defined (LINUX)',
        '#if defined(ANDROID) || defined(SOURCE_IOS)\n\treturn true;\n#elif defined (LINUX)')
+# CheckParm returns the "-basedir" token itself, not its value, so the launcher would
+# chdir("-basedir") and the relative -game garrysmod/gameinfo.txt lookup fails.
+change('launcher/launcher.cpp', '\t\tchar const *pOverrideDir = CommandLine()->CheckParm( "-basedir" );',
+       '#if defined(SOURCE_IOS)\n\t\tchar const *pOverrideDir = CommandLine()->ParmValue( "-basedir", (const char *)NULL );\n#else\n\t\tchar const *pOverrideDir = CommandLine()->CheckParm( "-basedir" );\n#endif')
 # video_services (Bink/QuickTime/WebM loaders) is not built for iOS; every g_pVideo
 # user in the engine checks for NULL, so leave it out of the app system group.
 change('launcher/launcher.cpp', '\t\t{ "video_services" DLL_EXT_STRING,  VIDEO_SERVICES_INTERFACE_VERSION },\n',
