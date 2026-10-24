@@ -69,8 +69,7 @@ void GModPort_RevealFile(const char* path) {
 // Everything the app and engine print goes to Documents/gmodport_log.txt, readable via Files.
 static FILE* g_log = nullptr;
 static void LogToFile(void*, int, SDL_LogPriority, const char* message) {
-    if (g_log) { fprintf(g_log, "%s
-", message); fflush(g_log); }
+    if (g_log) { fprintf(g_log, "%s\n", message); fflush(g_log); }
 }
 
 int main(int, char**) {
@@ -83,8 +82,8 @@ int main(int, char**) {
             dup2(fileno(g_log), STDOUT_FILENO);
             dup2(fileno(g_log), STDERR_FILENO);
             SDL_LogSetOutputFunction(LogToFile, nullptr);
-            fprintf(g_log, "GModPort build %s
-", [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] ? [[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] UTF8String] : "?");
+            NSString* build = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"];
+            fprintf(g_log, "GModPort build %s\n", build ? build.UTF8String : "?");
         }
         if (!InstallSourceModules()) { SDL_Log("Module table: %s",gmodport::LastModuleError()); return 1; }
         NSString* documents = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
