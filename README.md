@@ -28,11 +28,15 @@ CMake выбран для iOS SDK и app bundle, списки C++-файлов �
 wscript; это не ручная копия тысяч записей. Compiler/dependency probes выполняет
 реальная сборка, экспортёр читает только метаданные Waf.
 
-Модули статические; у каждого своё имя CreateInterface/InterfaceReg/
-CreateInterfaceInternal/Sys_GetFactoryThis через forced prefix header. Известные
-per-module globals также префиксуются. Другие duplicate symbols не подавляются
-опцией линкера: их нужно разбирать по compile/link log и дополнять карту.
-tier1/interface.cpp заменён общей реализацией loader и фабриками модулей.
+Модули статические; у каждого своё имя CreateInterface через forced prefix header.
+Каждый модуль с нужными объектами вспомогательных библиотек объединяется через
+`ld -r`, затем `nmedit` делает его внутренние символы локальными. Это сохраняет
+отдельное состояние tier1/tier2/tier3 и InterfaceReg у каждого модуля.
+Имена внешних API tier0/vstdlib/ToGLES/stub_steam сохраняются; фабрики остаются
+раздельными. Это [штатный способ обработки объектных файлов Apple](https://github.com/apple-oss-distributions/cctools/blob/main/man/nmedit.1).
+Опция подавления duplicate definitions не используется. Host-тест с настоящим
+EXPOSE_INTERFACE_FN и общим helper-архивом проходит; полная линковка движка ещё
+проверяется. tier1/interface.cpp заменён общей реализацией loader и фабриками.
 
 ## Контент и проверка на телефоне
 

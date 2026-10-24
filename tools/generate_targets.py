@@ -8,6 +8,7 @@ parser=argparse.ArgumentParser()
 parser.add_argument('--manifest',type=Path,required=True)
 parser.add_argument('--output',type=Path,required=True)
 parser.add_argument('--platform',type=Path,required=True)
+parser.add_argument('--isolate-modules',action='store_true')
 args=parser.parse_args()
 manifest=json.loads(args.manifest.read_text())
 if manifest['failures']:raise SystemExit('Cannot build an incomplete source graph')
@@ -44,6 +45,8 @@ for p in projects:
         symbols=['InterfaceReg','CreateInterface','CreateInterfaceInternal','Sys_GetFactoryThis',
                  'g_pFileSystem','g_pFullFileSystem','g_pMaterialSystem','g_pMatSystemSurface',
                  'g_pLauncherMgr','g_pPhysics','g_pGameRules','g_pSourceVR']
+        if args.isolate_modules:
+            symbols=['CreateInterface']
         header.write_text('#pragma once\n'+'\n'.join('#define '+s+' '+prefix+'_'+s for s in symbols)+'\n')
         factory=args.output/(name+'_factory.cpp')
         factory.write_text((args.platform/'module_factory.cpp.in').read_text())
@@ -56,4 +59,43 @@ registry=args.output/'module_table.cpp'
 registry.write_text('#include "static_modules.h"\n'+'\n'.join(externs)+'\nbool InstallSourceModules() {\nstatic const gmodport::Module modules[] = {\n'+',\n'.join(table)+'\n};\nreturn gmodport::InstallModules(modules,sizeof(modules)/sizeof(modules[0]));\n}\n')
 text.append('set(SOURCE_MODULE_TARGETS '+' '.join(module_targets)+')')
 text.append('set(SOURCE_MODULE_TABLE '+q(registry)+')')
+if args.isolate_modules:
+    by_name={p['target']:p for p in projects}
+    objects=[]
+    object_targets=[]
+    def helpers(project):
+        result=[]
+        seen=set()
+        def visit(name):
+            if name in seen or name not in by_name or by_name[name]['kind']!='static':return
+            seen.add(name)
+            result.append(name)
+            for dep in by_name[name].get('use',[]):visit(dep)
+        for dep in project.get('use',[]):visit(dep)
+        return result
+    isolate=args.platform.parent/'tools/isolate_module.py'
+    for p in projects:
+        if p['kind']!='module':continue
+        name=p['target']
+        target=ident(name)
+        prefix='gp_'+re.sub('[^A-Za-z0-9_]','_',name)
+        module_helpers=[ident(h) for h in helpers(p)]
+        output=args.output/(name+'_isolated.o')
+        command=['${Python3_EXECUTABLE}',str(isolate),'--archive',f'$<TARGET_FILE:{target}>',
+                 '--output',str(output),'--export',prefix+'_CreateInterface',
+                 '--minimum','${CMAKE_OSX_DEPLOYMENT_TARGET}']
+        for helper in module_helpers:command += ['--helper',f'$<TARGET_FILE:{helper}>']
+        if name in ('tier0','vstdlib','steam_api','togl'):command.append('--export-module-symbols')
+        if name=='launcher':command += ['--export','LauncherMain']
+        capsule=target+'_isolated'
+        text.append('add_custom_command(OUTPUT '+q(output)+'\n  COMMAND '+
+                    ' '.join(q(a) for a in command)+'\n  DEPENDS '+
+                    ' '.join([target,*module_helpers,q(isolate)])+'\n  VERBATIM\n)')
+        text.append(f'add_custom_target({capsule} DEPENDS {q(output)})')
+        objects.append(q(output))
+        object_targets.append(capsule)
+    used_external=sorted({external[d] for p in projects for d in p.get('use',[]) if d in external})
+    text.append('set(SOURCE_MODULE_OBJECTS '+' '.join(objects)+')')
+    text.append('set(SOURCE_MODULE_OBJECT_TARGETS '+' '.join(object_targets)+')')
+    text.append('set(SOURCE_EXTERNAL_TARGETS '+' '.join(used_external)+')')
 (args.output/'targets.cmake').write_text('\n'.join(text)+'\n')

@@ -30,7 +30,8 @@ file(MAKE_DIRECTORY "${generated}")
 execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/export_engine.py"
   --engine "${SOURCE_ENGINE}" --sdl-include "${SDL_SOURCE}/include" --output "${generated}/source-manifest.json" COMMAND_ERROR_IS_FATAL ANY)
 execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/generate_targets.py"
-  --manifest "${generated}/source-manifest.json" --output "${generated}" --platform "${CMAKE_SOURCE_DIR}/platform" COMMAND_ERROR_IS_FATAL ANY)
+  --manifest "${generated}/source-manifest.json" --output "${generated}" --platform "${CMAKE_SOURCE_DIR}/platform"
+  --isolate-modules COMMAND_ERROR_IS_FATAL ANY)
 include("${generated}/targets.cmake")
 add_library(port_source_loader STATIC platform/source_loader.cpp)
 target_include_directories(port_source_loader PRIVATE "${SOURCE_ENGINE}/public" "${SOURCE_ENGINE}/public/tier0" "${SOURCE_ENGINE}/public/tier1")
@@ -39,11 +40,10 @@ target_link_libraries(port_source_loader PUBLIC port_module_registry)
 add_executable(GModPort MACOSX_BUNDLE app/ios_main.mm "${SOURCE_MODULE_TABLE}" resources/gameinfo.txt resources/touch_default.cfg)
 set_source_files_properties(app/ios_main.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 set_source_files_properties(resources/gameinfo.txt resources/touch_default.cfg PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
-target_link_libraries(GModPort PRIVATE port_source_loader port_module_registry SDL2::SDL2main SDL2::SDL2-static src_launcher)
-foreach(target IN LISTS SOURCE_MODULE_TARGETS)
-  target_link_libraries(GModPort PRIVATE ${target})
-  target_link_options(GModPort PRIVATE "LINKER:-force_load,$<TARGET_FILE:${target}>")
-endforeach()
+target_link_libraries(GModPort PRIVATE port_source_loader port_module_registry SDL2::SDL2main SDL2::SDL2-static ${SOURCE_EXTERNAL_TARGETS})
+set_source_files_properties(${SOURCE_MODULE_OBJECTS} PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
+target_sources(GModPort PRIVATE ${SOURCE_MODULE_OBJECTS})
+add_dependencies(GModPort ${SOURCE_MODULE_OBJECT_TARGETS})
 # First bring-up uses the task's explicitly permitted native GLES fallback.
 # ANGLE requires a separately built iOS EGL/GLES library and SDL EGL integration;
 # no desktop ANGLE binary is silently linked here.
