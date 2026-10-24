@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 #include <cstring>
+#include <cstdio>
+#include <unistd.h>
 
 extern "C" int LauncherMain(int argc, char** argv);
 bool InstallSourceModules();
@@ -64,8 +66,26 @@ void GModPort_RevealFile(const char* path) {
     if (file) GModPort_OpenFolder(file.stringByDeletingLastPathComponent.UTF8String);
 }
 
+// Everything the app and engine print goes to Documents/gmodport_log.txt, readable via Files.
+static FILE* g_log = nullptr;
+static void LogToFile(void*, int, SDL_LogPriority, const char* message) {
+    if (g_log) { fprintf(g_log, "%s
+", message); fflush(g_log); }
+}
+
 int main(int, char**) {
     @autoreleasepool {
+        NSString* logDir = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+        NSString* logPath = [logDir stringByAppendingPathComponent:@"gmodport_log.txt"];
+        g_log = fopen(logPath.UTF8String, "w");
+        if (g_log) {
+            setvbuf(g_log, nullptr, _IONBF, 0);
+            dup2(fileno(g_log), STDOUT_FILENO);
+            dup2(fileno(g_log), STDERR_FILENO);
+            SDL_LogSetOutputFunction(LogToFile, nullptr);
+            fprintf(g_log, "GModPort build %s
+", [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] ? [[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] UTF8String] : "?");
+        }
         if (!InstallSourceModules()) { SDL_Log("Module table: %s",gmodport::LastModuleError()); return 1; }
         NSString* documents = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         NSString* game = [documents stringByAppendingPathComponent:@"garrysmod"];
@@ -98,7 +118,7 @@ int main(int, char**) {
         }
         if (![[NSFileManager defaultManager] fileExistsAtPath:[game stringByAppendingPathComponent:@"maps/gm_construct.bsp"]])
             SDL_Log("gm_construct may be inside a VPK; content must be imported into %s", game.UTF8String);
-        std::vector<std::string> args={"GModPort","-basedir",documents.UTF8String,"-game","garrysmod","-novid","-insecure","-console",
+        std::vector<std::string> args={"GModPort","-basedir",documents.UTF8String,"-game","garrysmod","-novid","-insecure","-console","-condebug","-dev","2",
                                        "+touch_enable","1","+exec","touch_default.cfg","+map","gm_construct"};
         std::vector<char*> argv;
         for (auto& arg:args) argv.push_back(&arg[0]);
