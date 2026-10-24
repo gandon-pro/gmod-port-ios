@@ -1,4 +1,6 @@
 #import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #include <SDL.h>
 #include "static_modules.h"
 #include <string>
@@ -6,6 +8,30 @@
 
 extern "C" int LauncherMain(int argc, char** argv);
 bool InstallSourceModules();
+
+// FileOpenDialog's desktop `open` command has no subprocess equivalent on iOS.
+// Present the system Files picker at the requested directory on the UI thread.
+void GModPort_OpenFolder(const char* path) {
+    NSString* folder = path ? [NSString stringWithUTF8String:path] : nil;
+    if (!folder) return;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIWindow* window = nil;
+        for (UIScene* scene in UIApplication.sharedApplication.connectedScenes) {
+            if (scene.activationState != UISceneActivationStateForegroundActive ||
+                ![scene isKindOfClass:UIWindowScene.class]) continue;
+            for (UIWindow* candidate in ((UIWindowScene*)scene).windows)
+                if (candidate.isKeyWindow) { window = candidate; break; }
+            if (window) break;
+        }
+        UIViewController* presenter = window.rootViewController;
+        while (presenter.presentedViewController) presenter = presenter.presentedViewController;
+        if (!presenter || [presenter isKindOfClass:UIDocumentPickerViewController.class]) return;
+        UIDocumentPickerViewController* picker = [[UIDocumentPickerViewController alloc]
+            initForOpeningContentTypes:@[UTTypeFolder] asCopy:NO];
+        picker.directoryURL = [NSURL fileURLWithPath:folder isDirectory:YES];
+        [presenter presentViewController:picker animated:YES completion:nil];
+    });
+}
 
 int main(int, char**) {
     @autoreleasepool {

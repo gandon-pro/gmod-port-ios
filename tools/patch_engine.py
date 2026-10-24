@@ -47,4 +47,10 @@ if '// GModPort iOS native GLES fallback' not in text:
     text=text.replace(before,after)
     file.write_text(text,encoding='utf-8',newline='\n')
     changes.append(path)
+signature='void FileOpenDialog::OnOpenInExplorer()\n{'
+change('vgui2/vgui_controls/FileOpenDialog.cpp', signature,
+       '#if defined(SOURCE_IOS)\nextern void GModPort_OpenFolder(const char* path);\n#endif\n'+signature)
+change('vgui2/vgui_controls/FileOpenDialog.cpp',
+       '#elif defined( OSX )\n\tchar szCmd[ MAX_PATH * 2];',
+       '#elif defined(SOURCE_IOS)\n\tGModPort_OpenFolder(pCurrentDirectory);\n#elif defined( OSX )\n\tchar szCmd[ MAX_PATH * 2];')
 print(json.dumps({'engine_commit':pin,'platform_files_patched':changes,'game_code_modified':False},indent=2))

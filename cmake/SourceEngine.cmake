@@ -50,7 +50,8 @@ message(WARNING "Renderer bring-up: native Apple OpenGLES fallback. ANGLE/Metal 
 target_link_libraries(GModPort PRIVATE "-framework UIKit" "-framework Foundation" "-framework QuartzCore"
   "-framework OpenGLES" "-framework AVFoundation" "-framework AudioToolbox" "-framework CoreAudio"
   "-framework CoreMotion" "-framework GameController" "-framework Metal" "-framework CoreHaptics"
-  "-framework CoreGraphics" "-framework CoreText" "-framework Security" "-framework SystemConfiguration" iconv z bz2 expat)
+  "-framework CoreGraphics" "-framework CoreText" "-framework Security" "-framework SystemConfiguration"
+  "-framework UniformTypeIdentifiers" iconv z bz2 expat)
 set_target_properties(GModPort PROPERTIES MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/app/Info.plist.in"
   XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER com.kindmops.gmodport
   XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED NO XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED NO
