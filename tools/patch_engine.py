@@ -377,4 +377,37 @@ change('appframework/glmdisplaydb_linuxwin.inl',
        '                        m_modes->AddToTail( new GLMDisplayMode( w, h, 0 ) );\n'
        '        }\n'
        '#endif\n')
+# GModPort: UIKit finger ids are UITouch pointers, but FingerEvent indexes its arrays (and the client
+# touch code its finger slots) by id < TOUCH_FINGER_MAX_COUNT and drops anything else, so no touch
+# reached the game once SDL's touch->mouse emulation was off. Map each live finger to a small slot.
+change('inputsystem/touch_sdl.cpp',
+       'int TouchSDLWatcher( void *userInfo, SDL_Event *event )\n{\n'
+       '\tCInputSystem *pInputSystem = (CInputSystem *)userInfo;\n\n'
+       '\tif( !event || !pInputSystem ) return 1;\n\n'
+       '\tswitch ( event->type ) {\n',
+       '#if defined(SOURCE_IOS)\n'
+       'static SDL_FingerID s_GMPFingerIds[TOUCH_FINGER_MAX_COUNT];\n'
+       'static bool s_GMPFingerUsed[TOUCH_FINGER_MAX_COUNT];\n\n'
+       'static int GMP_FingerSlot( SDL_FingerID id, Uint32 type )\n{\n'
+       '\tint freeSlot = -1;\n'
+       '\tfor ( int i = 0; i < TOUCH_FINGER_MAX_COUNT; i++ )\n\t{\n'
+       '\t\tif ( s_GMPFingerUsed[i] && s_GMPFingerIds[i] == id )\n\t\t{\n'
+       '\t\t\tif ( type == SDL_FINGERUP )\n\t\t\t\ts_GMPFingerUsed[i] = false;\n'
+       '\t\t\treturn i;\n\t\t}\n'
+       '\t\tif ( !s_GMPFingerUsed[i] && freeSlot < 0 )\n\t\t\tfreeSlot = i;\n\t}\n'
+       '\tif ( type != SDL_FINGERDOWN || freeSlot < 0 )\n\t\treturn -1;\n'
+       '\ts_GMPFingerUsed[freeSlot] = true;\n'
+       '\ts_GMPFingerIds[freeSlot] = id;\n'
+       '\treturn freeSlot;\n}\n'
+       '#endif\n\n'
+       'int TouchSDLWatcher( void *userInfo, SDL_Event *event )\n{\n'
+       '\tCInputSystem *pInputSystem = (CInputSystem *)userInfo;\n\n'
+       '\tif( !event || !pInputSystem ) return 1;\n\n'
+       '#if defined(SOURCE_IOS)\n'
+       '\tif ( event->type == SDL_FINGERDOWN || event->type == SDL_FINGERUP || event->type == SDL_FINGERMOTION )\n\t{\n'
+       '\t\tconst int slot = GMP_FingerSlot( event->tfinger.fingerId, event->type );\n'
+       '\t\tif ( slot < 0 )\n\t\t\treturn 1;\n'
+       '\t\tevent->tfinger.fingerId = slot;\n\t}\n'
+       '#endif\n\n'
+       '\tswitch ( event->type ) {\n')
 print(json.dumps({'engine_commit':pin,'platform_files_patched':changes,'game_code_modified':False},indent=2))
