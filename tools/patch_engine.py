@@ -104,6 +104,30 @@ change('appframework/sdlmgr.cpp', '#if defined( TOGLES )\n\t\tif (SDL_GL_LoadLib
 # The sandbox cannot create /tmp/source_engine_*.lock and iOS runs one instance anyway.
 change('launcher/launcher.cpp', '#ifdef ANDROID\n\treturn true;\n#elif defined (LINUX)',
        '#if defined(ANDROID) || defined(SOURCE_IOS)\n\treturn true;\n#elif defined (LINUX)')
+# Apple GLES stops at 3.0: no glDrawRangeElementsBaseVertex (ES 3.2). FlushDrawStates
+# already receives the base vertex, so fold it into the vertex attrib pointer offsets
+# and draw with plain glDrawRangeElements (indices are then relative to the base).
+change('public/togles/linuxwin/glfuncs.h',
+       'GL_FUNC_VOID(OpenGL,true,glDrawRangeElementsBaseVertex,(GLenum a,GLuint b,GLuint c,GLsizei d,GLenum e,const GLvoid *f, GLenum g),(a,b,c,d,e,f,g))\n',
+       '#if !defined(SOURCE_IOS)\nGL_FUNC_VOID(OpenGL,true,glDrawRangeElementsBaseVertex,(GLenum a,GLuint b,GLuint c,GLsizei d,GLenum e,const GLvoid *f, GLenum g),(a,b,c,d,e,f,g))\n#endif\n')
+draw='\n\t\tgGL->glDrawRangeElementsBaseVertex( mode, start, end, count, type, indicesActual, baseVertex );'
+for path in ['public/togles/linuxwin/glmgr.h','togles/linuxwin/glmgr.cpp']:
+    change(path, draw, '\n#if defined(SOURCE_IOS)\n\t\tgGL->glDrawRangeElements( mode, start, end, count, type, indicesActual ); // base vertex is in the attrib pointers\n#else'+draw+'\n#endif')
+change('public/togles/linuxwin/glmgr.h', '\t\t\tuint m_nTotalBufferRevision;\n\t\t\tIDirect3DVertexDeclaration9\t*m_pVertDecl;',
+       '\t\t\tuint m_nTotalBufferRevision;\n\t\t\tuint m_nBaseVertex;\n\t\t\tIDirect3DVertexDeclaration9\t*m_pVertDecl;')
+change('public/togles/linuxwin/glmgr.h', '\t\t\tm_CurAttribs.m_nTotalBufferRevision = 0;\n',
+       '\t\t\tm_CurAttribs.m_nTotalBufferRevision = 0;\n\t\t\tm_CurAttribs.m_nBaseVertex = 0;\n')
+flush='togles/linuxwin/glmgr_flush.inl'
+change(flush, '\tif ( ( nCurTotalBufferRevision != m_CurAttribs.m_nTotalBufferRevision ) ||\n',
+       '\tif ( ( nCurTotalBufferRevision != m_CurAttribs.m_nTotalBufferRevision ) ||\n#if defined(SOURCE_IOS)\n\t\t( m_CurAttribs.m_nBaseVertex != nBaseVertex ) ||\n#endif\n')
+change(flush, '\t\tm_CurAttribs.m_nTotalBufferRevision = nCurTotalBufferRevision;\n',
+       '\t\tm_CurAttribs.m_nTotalBufferRevision = nCurTotalBufferRevision;\n\t\tm_CurAttribs.m_nBaseVertex = nBaseVertex;\n')
+change(flush, '\t\t\t\tnBufOffset += pBuf->m_nPersistentBufferStartOffset;\n\t\t\t}\n',
+       '\t\t\t\tnBufOffset += pBuf->m_nPersistentBufferStartOffset;\n\t\t\t}\n#if defined(SOURCE_IOS)\n\t\t\tnBufOffset += (int)( nBaseVertex * pStream->m_stride );\n#endif\n')
+# Report the 3.0 context but keep going; the only 3.2 requirement is emulated above.
+change('togles/linuxwin/glentrypoints.cpp',
+       '\t\t\tmajor, minor, patch, NEED_MAJOR, NEED_MINOR, NEED_PATCH);\n\t\treturn false;\n',
+       '\t\t\tmajor, minor, patch, NEED_MAJOR, NEED_MINOR, NEED_PATCH);\n#if !defined(SOURCE_IOS)\n\t\treturn false;\n#endif\n')
 change('materialsystem/shaderapidx9/shaderdevicedx8.cpp',
        '#include <Carbon/Carbon.h>',
        '#if !defined(SOURCE_IOS)\n#include <Carbon/Carbon.h>\n#endif')
