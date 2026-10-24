@@ -226,6 +226,7 @@ for file in sorted(src.rglob('*')):
         target=root/file.relative_to(src)
         data=file.read_bytes()
         if not target.exists() or target.read_bytes()!=data:
+            target.parent.mkdir(parents=True, exist_ok=True)  # game/shared/gmod is new
             target.write_bytes(data)
             changes.append(target.relative_to(root).as_posix())
 change('game/shared/hl2mp/weapon_physcannon.cpp',
@@ -302,6 +303,19 @@ change('appframework/sdlmgr.cpp', '\tint w, h;\n\tSDL_GetWindowSize(m_Window, &w
        '\tint w, h;\n#if defined(SOURCE_IOS)\n\textern void GModPort_DrawableSize(int* w, int* h);\n'
        '\tGModPort_DrawableSize(&w, &h);\n#else\n'
        '\tSDL_GetWindowSize(m_Window, &w, &h);\n#endif\n\twidth = (uint) w;\n')
+# FixUpPath lowercases relative names; only Linux/BSD then retry with a case-insensitive directory
+# scan. iOS is case-sensitive too: GMod's garrysmod/resource/ClientScheme.res was never found and
+# HL2's sourceengine/resource/clientscheme.res (no BgColorHud etc.) won, so HUD animations drew
+# their colours as the scheme-miss error pink.
+for path, count in [('filesystem/filesystem_stdio.cpp', 3), ('filesystem/basefilesystem.cpp', 1)]:
+    file = root/path
+    text = file.read_text(encoding='utf-8')
+    before = '#if defined(LINUX) || defined(PLATFORM_BSD)\n'
+    after = '#if defined(LINUX) || defined(PLATFORM_BSD) || defined(SOURCE_IOS)\n'
+    if text.count(after) != count:
+        if text.count(before) != count: raise SystemExit('Unexpected source context: ' + path)
+        file.write_text(text.replace(before, after), encoding='utf-8', newline='\n')
+        changes.append(path)
 # Diagnostic for the solid pink HUD boxes (health/ammo/suit): log what DrawBox is asked to draw.
 change('vgui2/vgui_controls/Panel.cpp',
        '\t\t m_nBgTextureId4 == -1 )\n\t{\n\t\treturn;\n\t}\n\n\tcolor[3] *= normalizedAlpha;\n',
