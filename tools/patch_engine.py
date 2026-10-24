@@ -97,6 +97,8 @@ change('launcher/launcher.cpp', '\t\t\t\tsystem( szOpenLine );',
 change('materialsystem/shaderapidx9/shaderdevicedx8.cpp',
        '#include <Carbon/Carbon.h>',
        '#if !defined(SOURCE_IOS)\n#include <Carbon/Carbon.h>\n#endif')
+change('appframework/sdlmgr.cpp', '\tretval = SDL_GL_GetProcAddress(fn);',
+       '#if defined(SOURCE_IOS)\n\textern void* GModPort_GLProcAddress(const char* name);\n\tretval = GModPort_GLProcAddress(fn);\n#else\n\tretval = SDL_GL_GetProcAddress(fn);\n#endif')
 
 # OSX is retained for Darwin's low-level platform implementation. Within ToGLES,
 # however, it selects desktop CGL, NSOpenGL and obsolete Mac GL workarounds.

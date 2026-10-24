@@ -1,13 +1,35 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+#import <OpenGLES/ES3/gl.h>
 #include <SDL.h>
+#include <SDL_syswm.h>
 #include "static_modules.h"
 #include <string>
 #include <vector>
+#include <cstring>
 
 extern "C" int LauncherMain(int argc, char** argv);
 bool InstallSourceModules();
+
+static void BindIOSFramebuffer(GLenum target, GLuint framebuffer) {
+    // UIKit's drawable is a nonzero FBO. Source/Android uses 0 to mean the
+    // screen; SDL_syswm.h explicitly requires binding the UIKit framebuffer.
+    if (framebuffer == 0) {
+        SDL_SysWMinfo info{};
+        SDL_VERSION(&info.version);
+        SDL_Window* window = SDL_GL_GetCurrentWindow();
+        if (window && SDL_GetWindowWMInfo(window, &info) && info.subsystem == SDL_SYSWM_UIKIT)
+            framebuffer = info.info.uikit.framebuffer;
+    }
+    glBindFramebuffer(target, framebuffer);
+}
+
+void* GModPort_GLProcAddress(const char* name) {
+    if (!std::strcmp(name, "glBindFramebuffer") || !std::strcmp(name, "glBindFramebufferEXT"))
+        return reinterpret_cast<void*>(&BindIOSFramebuffer);
+    return SDL_GL_GetProcAddress(name);
+}
 
 // FileOpenDialog's desktop `open` command has no subprocess equivalent on iOS.
 // Present the system Files picker at the requested directory on the UI thread.
