@@ -148,8 +148,9 @@ void CWeaponGMPPhysGun::ItemPostFrame( void )
 			Carry( pOwner );
 		}
 	}
-	else if ( !m_bWaitForRelease )
+	else
 	{
+		// Grabs unless a freeze is waiting for release; draws the beam either way.
 		Grab( pOwner );
 	}
 #endif
@@ -199,8 +200,11 @@ void CWeaponGMPPhysGun::Grab( CBasePlayer *pOwner )
 
 	trace_t tr;
 	UTIL_TraceLine( start, start + forward * MAX_TRACE_LENGTH, MASK_SHOT, pOwner, COLLISION_GROUP_NONE, &tr );
+	// Firing at nothing grabbable still shows the beam, ending where the shot hits (as in GMod).
+	m_bBeam = true;
+	m_vecBeamEnd = tr.endpos;
 	CBaseEntity *pEntity = tr.m_pEnt;
-	if ( !pEntity || pEntity->IsWorld() || pEntity->IsPlayer() || pEntity->GetMoveType() != MOVETYPE_VPHYSICS )
+	if ( m_bWaitForRelease || !pEntity || pEntity->IsWorld() || pEntity->IsPlayer() || pEntity->GetMoveType() != MOVETYPE_VPHYSICS )
 		return;
 	IPhysicsObject *pPhys = pEntity->VPhysicsGetObject();
 	if ( !pPhys )
@@ -215,8 +219,6 @@ void CWeaponGMPPhysGun::Grab( CBasePlayer *pOwner )
 	// Hold the object by the point that was hit, not by its center.
 	VectorITransform( tr.endpos, pEntity->EntityToWorldTransform(), m_grab.m_attachedPositionObjectSpace );
 	m_flDistance = ( tr.endpos - start ).Length();
-	m_bBeam = true;
-	m_vecBeamEnd = tr.endpos;
 }
 
 void CWeaponGMPPhysGun::Carry( CBasePlayer *pOwner )
