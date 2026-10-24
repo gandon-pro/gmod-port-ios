@@ -62,7 +62,7 @@ jobs:
         run: python3 tools/patch_engine.py deps/engine
       - name: Configure static Source engine
         run: |
-          cmake -S . -B build-ios -G Xcode -DCMAKE_SYSTEM_NAME=iOS \
+          cmake -S . -B build-ios -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 -DGMOD_BUILD_ENGINE=ON -DBUILD_TESTING=OFF \
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5
@@ -70,10 +70,9 @@ jobs:
         timeout-minutes: 300
         run: |
           set -o pipefail
-          cmake --build build-ios --config Release --parallel 3 -- \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO 2>&1 | tee build-ios/compile.log
+          cmake --build build-ios --parallel 3 -- -k 40 2>&1 | tee build-ios/compile.log
       - name: Package unsigned IPA
-        run: python3 tools/package_ipa.py --app build-ios/Release-iphoneos/GModPort.app --output artifacts/GModPort-unsigned.ipa
+        run: python3 tools/package_ipa.py --app build-ios/GModPort.app --output artifacts/GModPort-unsigned.ipa
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
