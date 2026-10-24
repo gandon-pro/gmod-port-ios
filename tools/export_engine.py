@@ -35,7 +35,10 @@ class Context:
         self.directory = engine / folder
         self.projects = []
         self.path = types.SimpleNamespace(abspath=lambda: str(self.directory))
-    def define(self, name, value=1): self.env.append_unique('DEFINES', [f'{name}={value}'])
+    def define(self, name, value=1):
+        if isinstance(value, (str,list,tuple)):
+            value=json.dumps(str(value) if not isinstance(value,str) else value)
+        self.env.append_unique('DEFINES', [f'{name}={value}'])
     def get_taskgen_count(self): return len(self.projects)
     def stlib(self, **kwargs): return self.capture('static', kwargs)
     def shlib(self, **kwargs): return self.capture('module', kwargs)
@@ -83,7 +86,7 @@ def main():
                      'SOURCE_IOS=1','PLATFORM_64BITS=1','GNUC=1','TOGLES=1',
                      'DX_TO_GL_ABSTRACTION=1','USE_SDL=1','DISABLE_STEAM=1','NO_STEAM=1',
                      'NO_HOOK_MALLOC=1','NO_MEMOVERRIDE_NEW_DELETE=1','TIER1_STATIC_LIB=1',
-                     'NDEBUG=1','_DLL_EXT=.a'])
+                     'NDEBUG=1','_DLL_EXT=.a','GIT_COMMIT_HASH="ed8209cc35c61fbd8ddff8480962a01c981eef2f"'])
     result=[]
     failures=[]
     for folder in dict.fromkeys(folders):

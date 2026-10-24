@@ -12,7 +12,7 @@ app=args.app.resolve()
 info=plistlib.loads((app/'Info.plist').read_bytes())
 binary=app/info['CFBundleExecutable']
 subprocess.run(['xcrun','lipo','-info',str(binary)],check=True)
-subprocess.run(['xcrun','lipo','-verify_arch','arm64',str(binary)],check=True)
+subprocess.run(['xcrun','lipo',str(binary),'-verify_arch','arm64'],check=True)
 assert info['UIFileSharingEnabled'] is True
 assert not list(app.rglob('libclient.dylib'))
 args.output.parent.mkdir(parents=True,exist_ok=True)

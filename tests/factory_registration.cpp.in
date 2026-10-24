@@ -1,0 +1,4 @@
+#include "tier1/interface.h"
+static int value = @FACTORY_VALUE@;
+static void* InstantiateTest() { return &value; }
+EXPOSE_INTERFACE_FN(InstantiateTest, SharedTestInterface, "SharedTestInterface001")
