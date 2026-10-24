@@ -1,0 +1,71 @@
+name: G1 Source iOS
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: gmod-g1-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  engine-ios:
+    runs-on: macos-14
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record toolchain
+        run: |
+          xcode-select -p
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          uname -m
+      - name: Test static module registry
+        run: |
+          cmake -S . -B build-host -DGMOD_BUILD_ENGINE=OFF -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build-host --parallel 3
+          ctest --test-dir build-host --output-on-failure
+      - name: Fetch pinned dependencies
+        run: python3 tools/bootstrap.py
+      - name: Install host build tools
+        run: brew install ninja cmake autoconf automake libtool gettext gperf pkg-config
+      - uses: actions/cache@v4
+        id: dependencies
+        with:
+          path: build-deps/install
+          key: ios-g1-deps-v1-${{ runner.arch }}-${{ hashFiles('dependencies.lock.json', 'tools/build_deps.sh') }}
+      - name: Cross-compile iPhone dependencies
+        if: steps.dependencies.outputs.cache-hit != 'true'
+        run: bash tools/build_deps.sh
+      - name: Apply iOS platform patch
+        run: python3 tools/patch_engine.py deps/engine
+      - name: Configure static Source engine
+        run: |
+          cmake -S . -B build-ios -G Xcode -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 -DGMOD_BUILD_ENGINE=ON -DBUILD_TESTING=OFF \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      - name: Compile all Source modules and iPhone app
+        timeout-minutes: 300
+        run: |
+          set -o pipefail
+          cmake --build build-ios --config Release --parallel 3 -- \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO 2>&1 | tee build-ios/compile.log
+      - name: Package unsigned IPA
+        run: python3 tools/package_ipa.py --app build-ios/Release-iphoneos/GModPort.app --output artifacts/GModPort-unsigned.ipa
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: GModPort-unsigned
+          path: artifacts/GModPort-unsigned.ipa
+          if-no-files-found: error
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: G1-diagnostics
+          path: |
+            build-ios/compile.log
+            build-ios/generated/source-manifest.json
+            build-ios/CMakeFiles/CMakeConfigureLog.yaml
+          if-no-files-found: ignore

@@ -1,0 +1,21 @@
+// Compiled once per module with that module's forced prefix header.
+#include "tier1/interface.h"
+#include <cstring>
+
+InterfaceReg* InterfaceReg::s_pInterfaceRegs = nullptr;
+InterfaceReg::InterfaceReg(InstantiateInterfaceFn fn, const char* name)
+    : m_CreateFn(fn), m_pName(name), m_pNext(s_pInterfaceRegs) {
+    s_pInterfaceRegs = this;
+}
+void* CreateInterfaceInternal(const char* name, int* status) {
+    for (auto* node = InterfaceReg::s_pInterfaceRegs; node; node = node->m_pNext) {
+        if (std::strcmp(node->m_pName, name) == 0) {
+            if (status) *status = IFACE_OK;
+            return node->m_CreateFn();
+        }
+    }
+    if (status) *status = IFACE_FAILED;
+    return nullptr;
+}
+void* CreateInterface(const char* name, int* status) { return CreateInterfaceInternal(name, status); }
+CreateInterfaceFn Sys_GetFactoryThis() { return &CreateInterface; }

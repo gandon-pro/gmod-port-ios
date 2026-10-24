@@ -1,0 +1,10 @@
+/build*/
+/deps/
+/artifacts/
+__pycache__/
+*.ipa
+*.pdb
+*.obj
+*.lib
+*.exe
+*.log
