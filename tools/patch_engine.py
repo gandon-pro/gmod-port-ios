@@ -297,10 +297,10 @@ change('appframework/sdlmgr.cpp', '\tflags |= SDL_WINDOW_OPENGL;\n',
        '\tflags |= SDL_WINDOW_OPENGL;\n#if defined(SOURCE_IOS)\n\tflags |= SDL_WINDOW_ALLOW_HIGHDPI;\n#endif\n')
 # togl presents with Blit2 onto DisplayedSize(), which SDL reports in points: with HighDPI the
 # 2532x1170 renderbuffer got the frame in its 844x390 corner. Use the renderbuffer's pixel size.
-change('appframework/sdlmgr.cpp', '#include "SDL_opengl.h"\n',
-       '#include "SDL_opengl.h"\n#if defined(SOURCE_IOS)\nextern void GModPort_DrawableSize(int* w, int* h);\n#endif\n')
+# (Declared at the call site: the SDL_opengl.h include sits in a non-iOS #else branch.)
 change('appframework/sdlmgr.cpp', '\tint w, h;\n\tSDL_GetWindowSize(m_Window, &w, &h);\n\twidth = (uint) w;\n',
-       '\tint w, h;\n#if defined(SOURCE_IOS)\n\tGModPort_DrawableSize(&w, &h);\n#else\n'
+       '\tint w, h;\n#if defined(SOURCE_IOS)\n\textern void GModPort_DrawableSize(int* w, int* h);\n'
+       '\tGModPort_DrawableSize(&w, &h);\n#else\n'
        '\tSDL_GetWindowSize(m_Window, &w, &h);\n#endif\n\twidth = (uint) w;\n')
 # Diagnostic for the solid pink HUD boxes (health/ammo/suit): log what DrawBox is asked to draw.
 change('vgui2/vgui_controls/Panel.cpp',
