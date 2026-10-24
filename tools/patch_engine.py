@@ -5,6 +5,7 @@ Never modifies game/client/gmod, game/server/gmod or game/shared/gmod.
 import argparse
 import json
 from pathlib import Path
+import re
 import subprocess
 
 parser=argparse.ArgumentParser()
@@ -53,4 +54,31 @@ change('vgui2/vgui_controls/FileOpenDialog.cpp', signature,
 change('vgui2/vgui_controls/FileOpenDialog.cpp',
        '#elif defined( OSX )\n\tchar szCmd[ MAX_PATH * 2];',
        '#elif defined(SOURCE_IOS)\n\tGModPort_OpenFolder(pCurrentDirectory);\n#elif defined( OSX )\n\tchar szCmd[ MAX_PATH * 2];')
+
+# OSX is retained for Darwin's low-level platform implementation. Within ToGLES,
+# however, it selects desktop CGL, NSOpenGL and obsolete Mac GL workarounds.
+# iOS uses the renderer's existing SDL/GLES paths instead. Keep the broader
+# POSIX selection (BSD || OSX || LINUX) and the GLX exclusion unchanged.
+for folder in ['public/togles', 'togles']:
+    for file in sorted((root/folder).rglob('*')):
+        if file.suffix not in ('.h', '.cpp', '.inl'): continue
+        text=file.read_text(encoding='utf-8')
+        lines=[]
+        for line in text.splitlines(keepends=True):
+            if 'SOURCE_IOS' not in line:
+                line=re.sub(r'^(\s*)#ifdef\s+OSX\b',
+                            r'\1#if defined(OSX) && !defined(SOURCE_IOS)', line)
+                line=re.sub(r'^(\s*)#ifndef\s+OSX\b',
+                            r'\1#if !defined(OSX) || defined(SOURCE_IOS)', line)
+                if re.match(r'^\s*#if\s+defined\s*\(\s*OSX\s*\)', line):
+                    line=re.sub(r'defined\s*\(\s*OSX\s*\)',
+                                '(defined(OSX) && !defined(SOURCE_IOS))', line, count=1)
+                elif re.match(r'^\s*#if\s+!defined\s*\(\s*OSX\s*\)', line):
+                    line=re.sub(r'!defined\s*\(\s*OSX\s*\)',
+                                '(!defined(OSX) || defined(SOURCE_IOS))', line, count=1)
+            lines.append(line)
+        updated=''.join(lines)
+        if updated != text:
+            file.write_text(updated,encoding='utf-8',newline='\n')
+            changes.append(file.relative_to(root).as_posix())
 print(json.dumps({'engine_commit':pin,'platform_files_patched':changes,'game_code_modified':False},indent=2))

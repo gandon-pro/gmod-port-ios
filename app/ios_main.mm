@@ -23,6 +23,10 @@ void GModPort_OpenFolder(const char* path) {
                 if (candidate.isKeyWindow) { window = candidate; break; }
             if (window) break;
         }
+        // SDL2 can use the legacy UIApplication lifecycle without UIScenes.
+        if (!window)
+            for (UIWindow* candidate in UIApplication.sharedApplication.windows)
+                if (candidate.isKeyWindow) { window = candidate; break; }
         UIViewController* presenter = window.rootViewController;
         while (presenter.presentedViewController) presenter = presenter.presentedViewController;
         if (!presenter || [presenter isKindOfClass:UIDocumentPickerViewController.class]) return;
