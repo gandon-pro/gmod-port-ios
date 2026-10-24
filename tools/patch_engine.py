@@ -295,20 +295,22 @@ for axis in ('motion', 'button'):
 # backbuffer was shrunk to it and upscaled again by the compositor. Render to native pixels.
 change('appframework/sdlmgr.cpp', '\tflags |= SDL_WINDOW_OPENGL;\n',
        '\tflags |= SDL_WINDOW_OPENGL;\n#if defined(SOURCE_IOS)\n\tflags |= SDL_WINDOW_ALLOW_HIGHDPI;\n#endif\n')
-# The blit target is UIKit's color renderbuffer: take its real pixel size (ios_main.mm) rather than
-# SDL's window/drawable size, and keep the engine's leftover scissor rect off the blit.
-change('appframework/sdlmgr.cpp', '\t\t\tSDL_GetWindowSize(m_Window, &dstxmax, &dstymax);\n',
-       '#if defined(SOURCE_IOS)\n\t\t\tGModPort_DrawableSize(&dstxmax, &dstymax);\n#else\n'
-       '\t\t\tSDL_GetWindowSize(m_Window, &dstxmax, &dstymax);\n#endif\n')
+# togl presents with Blit2 onto DisplayedSize(), which SDL reports in points: with HighDPI the
+# 2532x1170 renderbuffer got the frame in its 844x390 corner. Use the renderbuffer's pixel size.
 change('appframework/sdlmgr.cpp', '#include "SDL_opengl.h"\n',
        '#include "SDL_opengl.h"\n#if defined(SOURCE_IOS)\nextern void GModPort_DrawableSize(int* w, int* h);\n#endif\n')
-blit=('#ifdef TOGLES\n\t\t\tglBlitFramebuffer(\n'
-      '\t\t\t\t\t/* src min and maxes xy xy */ srcxmin, srcymin,\t\t\t\tsrcxmax,srcymax,\n'
-      '\t\t\t\t\t/* dst min and maxes xy xy */ dstxmin, dstymax,\t\t\t\tdstxmax,dstymin,\t\t// note yflip here\n'
-      '\t\t\t\t\tGL_COLOR_BUFFER_BIT, filter );\n')
-change('appframework/sdlmgr.cpp', blit,
-       '#if defined(SOURCE_IOS)\n\t\t\tconst GLboolean scissor = glIsEnabled( GL_SCISSOR_TEST );\n\t\t\tglDisable( GL_SCISSOR_TEST );\n#endif\n'
-       +blit+'#if defined(SOURCE_IOS)\n\t\t\tif ( scissor )\n\t\t\t\tglEnable( GL_SCISSOR_TEST );\n#endif\n')
+change('appframework/sdlmgr.cpp', '\tint w, h;\n\tSDL_GetWindowSize(m_Window, &w, &h);\n\twidth = (uint) w;\n',
+       '\tint w, h;\n#if defined(SOURCE_IOS)\n\tGModPort_DrawableSize(&w, &h);\n#else\n'
+       '\tSDL_GetWindowSize(m_Window, &w, &h);\n#endif\n\twidth = (uint) w;\n')
+# Diagnostic for the solid pink HUD boxes (health/ammo/suit): log what DrawBox is asked to draw.
+change('vgui2/vgui_controls/Panel.cpp',
+       '\t\t m_nBgTextureId4 == -1 )\n\t{\n\t\treturn;\n\t}\n\n\tcolor[3] *= normalizedAlpha;\n',
+       '\t\t m_nBgTextureId4 == -1 )\n\t{\n\t\treturn;\n\t}\n\n\tcolor[3] *= normalizedAlpha;\n'
+       '#if defined(SOURCE_IOS)\n\tstatic int s_nBoxLogs;\n\tif ( s_nBoxLogs < 12 )\n\t{\n\t\ts_nBoxLogs++;\n'
+       '\t\tint cw, ct, tw, tt;\n\t\tGetCornerTextureSize( cw, ct );\n\t\tsurface()->DrawGetTextureSize( m_nBgTextureId1, tw, tt );\n'
+       '\t\tchar file[MAX_PATH] = "";\n\t\tsurface()->DrawGetTextureFile( m_nBgTextureId1, file, sizeof( file ) );\n'
+       '\t\tMsg( "GMP DrawBox %s: color %d %d %d %d, box %dx%d, corner %dx%d, tex %d \'%s\' %dx%d, hollow %d\\n", GetName(),\n'
+       '\t\t\tcolor.r(), color.g(), color.b(), color.a(), wide, tall, cw, ct, m_nBgTextureId1, file, tw, tt, hollow );\n\t}\n#endif\n')
 # GMod-style main menu: large entries sized to the screen (GMod's scheme has no MainMenuFont and
 # its MainMenu.MenuItemHeight is $WIN32-only), no server browser (no master server here).
 path='gameui/BasePanel.cpp'
