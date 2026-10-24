@@ -33,20 +33,22 @@ symbols={'_'+s for s in args.exports}
 module_symbols=defined(args.archive)
 if not symbols <= module_symbols:
     raise SystemExit('Missing module exports: '+str(sorted(symbols-module_symbols)))
-if args.export_module_symbols:
-    # Shared tier0/vstdlib/ToGLES APIs remain visible. Their factory registry
-    # implementation is still private, just as in every other module.
-    symbols |= {s for s in module_symbols
-                if not any(name in s for name in
-                           ('InterfaceReg','CreateInterfaceInternal','Sys_GetFactoryThis'))}
 args.output.parent.mkdir(parents=True,exist_ok=True)
 exports=args.output.with_suffix('.exports.txt')
-exports.write_text('\n'.join(sorted(symbols))+'\n')
 combined=args.output.with_suffix('.combined.o')
 subprocess.run(['xcrun','ld','-r','-arch',args.arch,'-syslibroot',sdk,
                 '-platform_version','ios' if args.sdk=='iphoneos' else 'macos',args.minimum,version,
                 '-o',str(combined),'-force_load',str(args.archive),
                 *map(str,args.helper)],check=True)
+if args.export_module_symbols:
+    # Shared tier0/vstdlib/ToGLES APIs remain visible. Their factory registry
+    # implementation is still private, just as in every other module.
+    # ld -r turns private-extern/hidden symbols (weak typeinfo, inline helpers)
+    # into locals, so only symbols still global in the combined object qualify.
+    symbols |= {s for s in module_symbols & defined(combined)
+                if not any(name in s for name in
+                           ('InterfaceReg','CreateInterfaceInternal','Sys_GetFactoryThis'))}
+exports.write_text('\n'.join(sorted(symbols))+'\n')
 subprocess.run(['xcrun','nmedit','-s',str(exports),str(combined),'-o',str(args.output)],check=True)
 actual=defined(args.output)
 if actual != symbols:
