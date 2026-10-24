@@ -4,9 +4,10 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 source="${1:-$root/deps/luajit}"
 output="$root/build-gluavm/ios-arm64"
 python3 "$root/gluavm/patch_luajit.py" "$source"
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-11.0}"
 sdk="$(xcrun --sdk iphoneos --show-sdk-path)"
 cc="$(xcrun --sdk iphoneos --find clang)"
-make -C "$source" clean
+make -C "$source" clean TARGET_SYS=iOS
 make -C "$source" -j3 DEFAULT_CC=clang HOST_CC="clang -m64" CROSS="$(dirname "$cc")/" \
   TARGET_SYS=iOS BUILDMODE=static TARGET_FLAGS="-arch arm64 -isysroot $sdk -miphoneos-version-min=15.0" \
   XCFLAGS="-DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI"

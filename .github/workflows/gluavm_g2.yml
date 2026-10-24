@@ -29,6 +29,7 @@ jobs:
         run: bash gluavm/build_ios.sh
       - name: Build native host VM for C API verification
         run: |
+          export MACOSX_DEPLOYMENT_TARGET=11.0
           make -C deps/luajit clean
           MACOSX_DEPLOYMENT_TARGET=11.0 make -C deps/luajit -j3 DEFAULT_CC=clang \
             BUILDMODE=static XCFLAGS="-DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI"
