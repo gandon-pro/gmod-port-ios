@@ -15,7 +15,9 @@ find_package(SDL2 REQUIRED CONFIG PATHS "${GMOD_DEPS_PREFIX}/lib/cmake/SDL2" NO_
 foreach(pair "freetype;freetype" "fontconfig;fontconfig" "jpeg;jpeg" "png;png16;png" "curl;curl" "openal;openal;OpenAL")
   set(names ${pair})
   list(POP_FRONT names target)
-  find_library(dep_${target} NAMES ${names} PATHS "${GMOD_DEPS_PREFIX}/lib" NO_DEFAULT_PATH REQUIRED)
+  # These are already cross-compiled archives at an explicit workspace path.
+  # Do not re-root that path under iPhoneOS.sdk as for SDK system libraries.
+  find_library(dep_${target} NAMES ${names} PATHS "${GMOD_DEPS_PREFIX}/lib" NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH REQUIRED)
   add_library(ios_${target} STATIC IMPORTED GLOBAL)
   set_target_properties(ios_${target} PROPERTIES IMPORTED_LOCATION "${dep_${target}}" INTERFACE_INCLUDE_DIRECTORIES "${GMOD_DEPS_PREFIX}/include")
 endforeach()
