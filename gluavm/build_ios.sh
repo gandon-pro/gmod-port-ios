@@ -16,3 +16,4 @@ cp "$source/src/libluajit.a" "$output/libgluavm.a"
 for header in lua.h lua.hpp luaconf.h lualib.h lauxlib.h luajit.h; do cp "$source/src/$header" "$output/include/"; done
 xcrun lipo -info "$output/libgluavm.a"
 xcrun lipo "$output/libgluavm.a" -verify_arch arm64
+python3 "$root/gluavm/verify_archive.py" "$output/libgluavm.a"
