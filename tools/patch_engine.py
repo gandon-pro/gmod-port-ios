@@ -97,6 +97,9 @@ change('engine/sys_mainwind.cpp', '#ifdef OSX\n\tid nsWindow',
        '#if defined(SOURCE_IOS)\n\treturn (void*)pInfo.info.uikit.window;\n#elif defined(OSX)\n\tid nsWindow')
 change('launcher/launcher.cpp', '\t\t\t\tsystem( szOpenLine );',
        '#if defined(SOURCE_IOS)\n\t\t\t\tSDL_OpenURL(szCmd);\n#else\n\t\t\t\tsystem( szOpenLine );\n#endif')
+# The sandbox cannot create /tmp/source_engine_*.lock and iOS runs one instance anyway.
+change('launcher/launcher.cpp', '#ifdef ANDROID\n\treturn true;\n#elif defined (LINUX)',
+       '#if defined(ANDROID) || defined(SOURCE_IOS)\n\treturn true;\n#elif defined (LINUX)')
 change('materialsystem/shaderapidx9/shaderdevicedx8.cpp',
        '#include <Carbon/Carbon.h>',
        '#if !defined(SOURCE_IOS)\n#include <Carbon/Carbon.h>\n#endif')
