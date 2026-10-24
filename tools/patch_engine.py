@@ -26,11 +26,8 @@ def change(path,before,after):
 signature='CSysModule *CBaseFileSystem::LoadModule( const char *pFileName, const char *pPathID, bool bValidatedDllOnly )\n{'
 change('filesystem/basefilesystem.cpp',signature,signature+'\n#if defined(SOURCE_IOS)\n\t// Static modules do not exist as files in Documents/bin.\n\treturn Sys_LoadModule(pFileName);\n#endif\n')
 for path in ['vguimatsurface/MatSystemSurface.cpp','vguimatsurface/FontTextureCache.cpp']:
-    file=root/path
-    text=file.read_text(encoding='utf-8')
-    text=text.replace('#include <Carbon/Carbon.h>','#if !defined(SOURCE_IOS)\n#include <Carbon/Carbon.h>\n#endif')
-    file.write_text(text,encoding='utf-8',newline='\n')
-    changes.append(path)
+    change(path, '#include <Carbon/Carbon.h>',
+           '#if !defined(SOURCE_IOS)\n#include <Carbon/Carbon.h>\n#endif')
 path='appframework/sdlmgr.cpp'
 file=root/path
 text=file.read_text(encoding='utf-8')

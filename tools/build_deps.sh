@@ -37,6 +37,9 @@ mkdir -p "$root/build-deps/fontconfig"
     cd "$root/build-deps/fontconfig"
     export CC="$(xcrun --sdk iphoneos --find clang)"
     export CFLAGS="-arch arm64 -isysroot $sdk -miphoneos-version-min=15.0"
+    # Autoconf's CPP recipes do not inherit CFLAGS. Hash-table generation must
+    # preprocess with the same target and SDK as the library compilation.
+    export CPP="$CC $CFLAGS -E"
     export CPPFLAGS="-I$prefix/include -I$prefix/include/freetype2"
     export LDFLAGS="-arch arm64 -isysroot $sdk -L$prefix/lib"
     export PKG_CONFIG_LIBDIR="$prefix/lib/pkgconfig"
@@ -49,7 +52,10 @@ mkdir -p "$root/build-deps/fontconfig"
     export CC_FOR_BUILD=clang
     export CFLAGS_FOR_BUILD=-O2
     "$font/configure" --host=aarch64-apple-darwin --prefix="$prefix" --disable-shared --enable-static --disable-docs --disable-nls
-    make -j3
-    make install RUN_FC_CACHE_TEST=false
+    # Only the library and its headers belong in the app. Top-level `make`
+    # also builds CLI utilities and tests using system(), unavailable on iOS.
+    make -C src -j3
+    make -C src install-libLTLIBRARIES
+    make -C fontconfig install-fontconfigincludeHEADERS
 )
 find "$prefix/lib" -name '*.a' -maxdepth 2 -print

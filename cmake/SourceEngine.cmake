@@ -32,7 +32,7 @@ execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/gener
 include("${generated}/targets.cmake")
 add_library(port_source_loader STATIC platform/source_loader.cpp)
 target_include_directories(port_source_loader PRIVATE "${SOURCE_ENGINE}/public" "${SOURCE_ENGINE}/public/tier0" "${SOURCE_ENGINE}/public/tier1")
-target_compile_definitions(port_source_loader PRIVATE POSIX=1 OSX=1 SOURCE_IOS=1 NO_MEMOVERRIDE_NEW_DELETE=1)
+target_compile_definitions(port_source_loader PRIVATE POSIX=1 OSX=1 GNUC=1 SOURCE_IOS=1 NO_MEMOVERRIDE_NEW_DELETE=1)
 target_link_libraries(port_source_loader PUBLIC port_module_registry)
 add_executable(GModPort MACOSX_BUNDLE app/ios_main.mm "${SOURCE_MODULE_TABLE}" resources/gameinfo.txt resources/touch_default.cfg)
 set_source_files_properties(resources/gameinfo.txt resources/touch_default.cfg PROPERTIES MACOSX_PACKAGE_LOCATION Resources)

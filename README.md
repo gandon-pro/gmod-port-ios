@@ -9,8 +9,11 @@
   конфликты остальных символов и запуск gm_construct должны быть проверены.
 - Renderer bring-up использует разрешённый заданием native OpenGLES fallback.
   **ANGLE/Metal ещё не подключён**, его наличие не имитируется.
-- G2 Windows: статическая библиотека собрана; 9 runtime-тестов и 215 файлов
-  includes/sandbox проходят. iPhone arm64 build проверяется отдельным CI G2.
+- G2: статические библиотеки Windows x64 и iPhone arm64 собраны. На Windows и
+  macOS прошли 9 runtime-тестов и компиляция 215 файлов includes/sandbox.
+  [Успешный CI G2](https://github.com/gandon-pro/gmod-port-ios/actions/runs/40081079603).
+  Все 70 объектов iOS-архива проверены как Mach-O arm64 с платформой iOS;
+  выполнение VM на самом телефоне ещё не проверялось.
 - Код Aero в game/client/gmod, game/server/gmod и game/shared/gmod включается в
   source lists при наличии, но не изменяется средствами этого проекта.
 

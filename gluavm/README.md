@@ -25,7 +25,9 @@ JIT и FFI отключены как при генерации VM assembly, та
 ## iPhone arm64
 
 `bash gluavm/build_ios.sh` на macOS/Xcode. Выход:
-build-gluavm/ios-arm64/libgluavm.a + include/. Сборка проверяет arm64 через lipo.
+build-gluavm/ios-arm64/libgluavm.a + include/. Сборка проверяет arm64 через lipo
+и платформу iOS в каждом Mach-O объекте через verify_archive.py. Это исключает
+случайную подстановку macOS arm64-библиотеки с той же архитектурой.
 Workflow G2 дополнительно собирает native host VM для запуска тестов и компиляции
 корпуса. Это не означает выполнение VM на iPhone — только сборку и host validation.
 
