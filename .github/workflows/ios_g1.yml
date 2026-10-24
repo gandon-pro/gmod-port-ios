@@ -46,6 +46,8 @@ jobs:
           cmake -S . -B build-host -DGMOD_BUILD_ENGINE=OFF -DSOURCE_ENGINE_HEADERS="$PWD/deps/engine" -DCMAKE_BUILD_TYPE=Debug
           cmake --build build-host --parallel 3
           ctest --test-dir build-host --output-on-failure
+      - name: Test Mach-O module isolation with real Source factories
+        run: bash tests/test_module_isolation.sh "$PWD/deps/engine"
       - name: Install host build tools
         run: brew install ninja cmake ccache autoconf automake libtool gettext gperf pkg-config
       - uses: actions/cache/restore@v4
