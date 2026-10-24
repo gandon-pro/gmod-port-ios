@@ -83,10 +83,10 @@ for folder in ['public/togles', 'public/togl', 'togles']:
                             r'\1#if defined(OSX) && !defined(SOURCE_IOS)', line)
                 line=re.sub(r'^(\s*)#ifndef\s+OSX\b',
                             r'\1#if !defined(OSX) || defined(SOURCE_IOS)', line)
-                if re.match(r'^\s*#if\s+defined\s*\(\s*OSX\s*\)', line):
+                if 'SOURCE_IOS' not in line and re.match(r'^\s*#if\s+defined\s*\(\s*OSX\s*\)', line):
                     line=re.sub(r'defined\s*\(\s*OSX\s*\)',
                                 '(defined(OSX) && !defined(SOURCE_IOS))', line, count=1)
-                elif re.match(r'^\s*#if\s+!defined\s*\(\s*OSX\s*\)', line):
+                elif 'SOURCE_IOS' not in line and re.match(r'^\s*#if\s+!defined\s*\(\s*OSX\s*\)', line):
                     line=re.sub(r'!defined\s*\(\s*OSX\s*\)',
                                 '(!defined(OSX) || defined(SOURCE_IOS))', line, count=1)
             lines.append(line)
@@ -94,4 +94,19 @@ for folder in ['public/togles', 'public/togl', 'togles']:
         if updated != text:
             file.write_text(updated,encoding='utf-8',newline='\n')
             changes.append(file.relative_to(root).as_posix())
+
+# SDL_opengl.h intentionally declares no desktop GL types on iOS. ToGLES uses
+# Source's common/GL compatibility declarations (as on Android), resolving its
+# entry points from the actual GLES context rather than linking desktop GL.
+files=[root/'appframework/sdlmgr.cpp']
+for folder in ['public/togles', 'public/togl']:
+    files.extend((root/folder).rglob('*.h'))
+for file in files:
+    text=file.read_text(encoding='utf-8')
+    marker='// GModPort: ToGLES GL compatibility declarations on iOS'
+    before='#include "SDL_opengl.h"'
+    if before in text and marker not in text:
+        after=marker+'\n#if defined(SOURCE_IOS)\n#include <GL/gl.h>\n#include <GL/glext.h>\n#else\n'+before+'\n#endif'
+        file.write_text(text.replace(before,after),encoding='utf-8',newline='\n')
+        changes.append(file.relative_to(root).as_posix())
 print(json.dumps({'engine_commit':pin,'platform_files_patched':changes,'game_code_modified':False},indent=2))
