@@ -1,19 +1,28 @@
-"""Embed a local GMod install's content into the CI-built IPA (personal use only).
+"""Pack a local GMod install's content into the CI-built IPA (personal use only).
 
 The content never goes through CI or GitHub; this runs on the PC that owns the
-game. Result: Payload/GModPort.app/content/{garrysmod,sourceengine,platform}.
-On launch ios_main.mm links Documents/gmcontent to that folder, and
-resources/gameinfo.txt mounts everything through gmcontent/.
+game. The IPA gets Payload/GModPort.app/gmcontent.gmpk; on first launch
+ios_main.mm unpacks it into Documents/gmcontent, which resources/gameinfo.txt
+mounts. Reinstalling the same IPA does not unpack again (archive id check).
+
+gmpk format (little endian):
+  b'GMPK1\\0\\0\\0', u64 total file bytes, u32 file count, 16-byte archive id,
+  then one zlib stream of records: u16 path length, UTF-8 path, u64 size, data;
+  a record with path length 0 ends the stream.
 
 usage: python tools/embed_content.py <GModPort-unsigned.ipa> <GarrysMod dir> <out.ipa>
 """
 import argparse
 from pathlib import Path
 import shutil
+import struct
 import sys
+import uuid
 import zipfile
+import zlib
 
 APP = 'Payload/GModPort.app/'
+PAK = APP + 'gmcontent.gmpk'
 # Same set the gameinfo.txt search paths reference. content_hl2/content_cstrike
 # VPKs (2.6 GB) are not mounted by this port and are skipped.
 SOURCEENGINE_VPKS = ('hl2_textures', 'hl2_sound_vo_english', 'hl2_sound_misc', 'hl2_misc')
@@ -43,6 +52,7 @@ def main():
     parser.add_argument('ipa', type=Path)
     parser.add_argument('gmod', type=Path)
     parser.add_argument('output', type=Path)
+    parser.add_argument('--level', type=int, default=6, help='zlib level (1 fastest, 9 smallest)')
     args = parser.parse_args()
     for top in ('garrysmod', 'sourceengine', 'platform'):
         if not (args.gmod / top).is_dir():
@@ -56,21 +66,30 @@ def main():
             if path.is_file() and wanted(rel):
                 files.append((path, rel))
     total = sum(p.stat().st_size for p, _ in files)
-    print(f'{len(files)} files, {total / 2**30:.2f} GiB')
+    print(f'{len(files)} files, {total / 2**30:.2f} GiB uncompressed')
     tmp = args.output.with_suffix('.tmp')
     with zipfile.ZipFile(args.ipa) as src, zipfile.ZipFile(tmp, 'w', allowZip64=True) as dst:
         for info in src.infolist():
-            if info.filename.startswith(APP + 'content/'):
+            if info.filename == PAK:
                 continue
             with src.open(info) as r, dst.open(info, 'w', force_zip64=True) as w:
                 shutil.copyfileobj(r, w, 1 << 20)
-        done = 0
-        for path, rel in files:
-            # VPK archives and audio are already dense; storing keeps repacking fast.
-            method = zipfile.ZIP_STORED if path.suffix in ('.vpk', '.wav', '.mp3', '.bsp') else zipfile.ZIP_DEFLATED
-            dst.write(path, APP + 'content/' + rel, compress_type=method, compresslevel=1)
-            done += path.stat().st_size
-            print(f'\r{done * 100 // total:3d}%', end='', flush=True)
+        entry = zipfile.ZipInfo(PAK, date_time=(2026, 1, 1, 0, 0, 0))
+        entry.compress_type = zipfile.ZIP_STORED  # payload is already deflated
+        entry.external_attr = 0o644 << 16
+        with dst.open(entry, 'w', force_zip64=True) as w:
+            w.write(b'GMPK1\0\0\0' + struct.pack('<QI', total, len(files)) + uuid.uuid4().bytes)
+            z = zlib.compressobj(args.level)
+            done = 0
+            for path, rel in files:
+                name = rel.encode()
+                w.write(z.compress(struct.pack('<H', len(name)) + name + struct.pack('<Q', path.stat().st_size)))
+                with open(path, 'rb') as f:
+                    while chunk := f.read(4 << 20):
+                        w.write(z.compress(chunk))
+                        done += len(chunk)
+                        print(f'\r{done * 100 // total:3d}%', end='', flush=True)
+            w.write(z.compress(struct.pack('<H', 0)) + z.flush())
     print()
     tmp.replace(args.output)
     print(f'wrote {args.output} ({args.output.stat().st_size / 2**30:.2f} GiB)')
