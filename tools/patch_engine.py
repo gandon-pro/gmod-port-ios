@@ -74,12 +74,27 @@ change('togles/linuxwin/glmgrbasics.cpp', signature,
 change('togles/linuxwin/glmgrbasics.cpp', '\tsystem( temp );\n}',
        '\tsystem( temp );\n#endif // SOURCE_IOS\n}')
 
+# The iOS source list builds SDL audio, not the Mac AudioQueue recorder or
+# desktop hardware mixer controls. Select those same SDL/generic branches.
+path='engine/audio/voice.cpp'
+change(path, '#elif defined( OSX )', '#elif defined(OSX) && !defined(SOURCE_IOS)')
+change(path, '#ifdef OSX', '#if defined(OSX) && !defined(SOURCE_IOS)')
+path='engine/audio/voice_mixer_controls_openal.cpp'
+change(path, '#ifdef OSX', '#if defined(OSX) && !defined(SOURCE_IOS)')
+change(path, '#ifndef OSX', '#if !defined(OSX) || defined(SOURCE_IOS)')
+change('engine/sys_dll.cpp', '#include <Carbon/Carbon.h>',
+       '#if defined(SOURCE_IOS)\n#include <malloc/malloc.h>\n#else\n#include <Carbon/Carbon.h>\n#endif')
+change('engine/sys_dll.cpp', '#elif OSX\n\tstruct mstats memstats = mstats( );',
+       '#elif defined(SOURCE_IOS)\n\tmalloc_statistics_t memstats;\n\tmalloc_zone_statistics(malloc_default_zone(), &memstats);\n\tMsg("Allocated %.2f MB, Used: %.2f MB, #mallocs = %lu\\n",\n\t\tmemstats.size_allocated / (1024.0 * 1024.0),\n\t\tmemstats.size_in_use / (1024.0 * 1024.0), (unsigned long)memstats.blocks_in_use);\n#elif OSX\n\tstruct mstats memstats = mstats( );')
+
 # OSX is retained for Darwin's low-level platform implementation. Within ToGLES,
 # however, it selects desktop CGL, NSOpenGL and obsolete Mac GL workarounds.
 # iOS uses the renderer's existing SDL/GLES paths instead. Keep the broader
 # POSIX selection (BSD || OSX || LINUX) and the GLX exclusion unchanged.
+renderer_files=[root/'appframework/sdlmgr.cpp']
 for folder in ['public/togles', 'public/togl', 'togles']:
-    for file in sorted((root/folder).rglob('*')):
+    renderer_files.extend(sorted((root/folder).rglob('*')))
+for file in renderer_files:
         if file.suffix not in ('.h', '.cpp', '.inl'): continue
         text=file.read_text(encoding='utf-8')
         lines=[]
