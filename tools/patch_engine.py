@@ -104,6 +104,10 @@ change('appframework/sdlmgr.cpp', '#if defined( TOGLES )\n\t\tif (SDL_GL_LoadLib
 # The sandbox cannot create /tmp/source_engine_*.lock and iOS runs one instance anyway.
 change('launcher/launcher.cpp', '#ifdef ANDROID\n\treturn true;\n#elif defined (LINUX)',
        '#if defined(ANDROID) || defined(SOURCE_IOS)\n\treturn true;\n#elif defined (LINUX)')
+# video_services (Bink/QuickTime/WebM loaders) is not built for iOS; every g_pVideo
+# user in the engine checks for NULL, so leave it out of the app system group.
+change('launcher/launcher.cpp', '\t\t{ "video_services" DLL_EXT_STRING,  VIDEO_SERVICES_INTERFACE_VERSION },\n',
+       '#if !defined(SOURCE_IOS)\n\t\t{ "video_services" DLL_EXT_STRING,  VIDEO_SERVICES_INTERFACE_VERSION },\n#endif\n')
 # Apple GLES stops at 3.0: no glDrawRangeElementsBaseVertex (ES 3.2). FlushDrawStates
 # already receives the base vertex, so fold it into the vertex attrib pointer offsets
 # and draw with plain glDrawRangeElements (indices are then relative to the base).
