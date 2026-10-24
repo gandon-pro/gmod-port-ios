@@ -239,6 +239,41 @@ change(path, '\t\tWeapon_Switch( Weapon_OwnsThisType( "weapon_physcannon" ) );\n
        '\t\tWeapon_Switch( Weapon_OwnsThisType( "weapon_physgun" ) );\n\t}\n}')
 change('game/client/hl2mp/c_hl2mp_player.cpp', 'static ConVar cl_defaultweapon( "cl_defaultweapon", "weapon_physcannon"',
        'static ConVar cl_defaultweapon( "cl_defaultweapon", "weapon_physgun"')
+# Visible round joystick for the _move zone (radius touch_forwardzone of the screen height).
+path='game/client/touch.cpp'
+change(path, '\t\t\t\tf = ( move_start_y - y ) / touch_forwardzone.GetFloat();\n'
+             '\t\t\t\ts = ( move_start_x - x ) / touch_sidezone.GetFloat();\n'
+             '\t\t\t\tforward = bound( -1, f, 1 );\n'
+             '\t\t\t\tside = bound( -1, s, 1 );\n',
+       '\t\t\t\t// GModPort: round joystick, radius = touch_forwardzone of the screen height on both axes.\n'
+       '\t\t\t\tf = ( move_start_y - y ) / touch_forwardzone.GetFloat();\n'
+       '\t\t\t\ts = ( move_start_x - x ) * screen_w / screen_h / touch_forwardzone.GetFloat();\n'
+       '\t\t\t\tfloat len = sqrtf( f * f + s * s );\n'
+       '\t\t\t\tif( len > 1.f )\n'
+       '\t\t\t\t{\n'
+       '\t\t\t\t\tf /= len;\n'
+       '\t\t\t\t\ts /= len;\n'
+       '\t\t\t\t}\n'
+       '\t\t\t\tforward = f;\n'
+       '\t\t\t\tside = s;\n')
+change(path, '\tmeshBuilder.End();\n\tm_pMesh->Draw();\n\n\n\tif( m_flHideTouch < gpGlobals->curtime )',
+       '\tmeshBuilder.End();\n\tm_pMesh->Draw();\n\n'
+       '\t// GModPort: draw the _move joystick. It appears under the finger; idle it rests bottom-left.\n'
+       '\tif( state != state_edit )\n'
+       '\t{\n'
+       '\t\tconst int radius = touch_forwardzone.GetFloat() * screen_h;\n'
+       '\t\tconst bool active = move_finger != -1;\n'
+       '\t\tconst int cx = active ? move_start_x * screen_w : 0.16f * screen_w;\n'
+       '\t\tconst int cy = active ? move_start_y * screen_h : 0.70f * screen_h;\n'
+       '\t\tconst int kx = cx - side * radius, ky = cy - forward * radius;\n'
+       '\t\tvgui::surface()->DrawSetColor( 255, 255, 255, active ? 150 : 60 );\n'
+       '\t\tfor( int r = radius - 2; r <= radius + 1; r++ )\n'
+       '\t\t\tvgui::surface()->DrawOutlinedCircle( cx, cy, r, 64 );\n'
+       '\t\tvgui::surface()->DrawSetColor( 255, 255, 255, active ? 110 : 45 );\n'
+       '\t\tfor( int r = 1; r <= radius * 2 / 5; r++ )\n'
+       '\t\t\tvgui::surface()->DrawOutlinedCircle( kx, ky, r, 32 );\n'
+       '\t}\n\n'
+       '\tif( m_flHideTouch < gpGlobals->curtime )')
 # 1920x1080 backbuffer (-w/-h) is blitted onto a window measured in points; SDL touch->mouse
 # events arrive in points too, so vgui needs them scaled to the backbuffer. Windowed mode
 # leaves m_flMouseXScale at 1.0.
@@ -256,4 +291,77 @@ for axis in ('motion', 'button'):
            '\t\t\t\t\t}\n'
            '\t\t\t\t}\n'
            '#endif\n'+before)
+# GMod-style main menu: large entries sized to the screen (GMod's scheme has no MainMenuFont and
+# its MainMenu.MenuItemHeight is $WIN32-only), no server browser (no master server here).
+path='gameui/BasePanel.cpp'
+change(path, '\tvgui::HFont hMainMenuFont = pScheme->GetFont( "MainMenuFont", IsProportional() );',
+       '\tstatic vgui::HFont s_hGMPMenuFont = 0;\n'
+       '\tstatic int s_nGMPMenuFontTall = 0;\n'
+       '\tint screenWide, screenTall;\n'
+       '\tvgui::surface()->GetScreenSize( screenWide, screenTall );\n'
+       '\tif ( !s_hGMPMenuFont || s_nGMPMenuFontTall != screenTall / 20 )\n'
+       '\t{\n'
+       '\t\tconst char *family = vgui::surface()->GetFontFamilyName( pScheme->GetFont( "MenuLarge", IsProportional() ) );\n'
+       '\t\tif ( !s_hGMPMenuFont )\n'
+       '\t\t\ts_hGMPMenuFont = vgui::surface()->CreateFont();\n'
+       '\t\ts_nGMPMenuFontTall = screenTall / 20;\n'
+       '\t\tvgui::surface()->SetFontGlyphSet( s_hGMPMenuFont, ( family && *family ) ? family : "Verdana", s_nGMPMenuFontTall, 800, 0, 0,\n'
+       '\t\t\tvgui::ISurface::FONTFLAG_ANTIALIAS | vgui::ISurface::FONTFLAG_DROPSHADOW );\n'
+       '\t}\n'
+       '\tvgui::HFont hMainMenuFont = s_hGMPMenuFont;')
+change(path, '\t\t\theight = scheme()->GetProportionalScaledValue( height );\n',
+       '\t\t\theight = scheme()->GetProportionalScaledValue( height );\n'
+       '\t\tint screenWide, screenTall;\n'
+       '\t\tvgui::surface()->GetScreenSize( screenWide, screenTall );\n'
+       '\t\theight = MAX( height, screenTall / 14 );\n')
+change(path, '\tif( !bFoundServerBrowser && !ModInfo().IsSinglePlayerOnly() )',
+       '\tif( false && !bFoundServerBrowser && !ModInfo().IsSinglePlayerOnly() )')
+# The open spawn menu (gmp_physgun.inl) takes the touches; without this, scrolling it turns the camera.
+path='game/client/cdll_client_int.cpp'
+change(path, 'void CHLClient::IN_TouchEvent( int type, int fingerId, int x, int y )\n'
+       '{\n'
+       '\tif( enginevgui->IsGameUIVisible() )\n'
+       '\t\treturn;\n',
+       '// GModPort: set by the hl2mp spawn menu (gmp_physgun.inl); other games leave it NULL.\n'
+       'bool ( *g_pfnGMPTouchBlocked )( void ) = NULL;\n'
+       '\n'
+       'void CHLClient::IN_TouchEvent( int type, int fingerId, int x, int y )\n'
+       '{\n'
+       '\tif( enginevgui->IsGameUIVisible() )\n'
+       '\t\treturn;\n'
+       '\t// GModPort: the open spawn menu takes the touches, or scrolling it would also turn the camera.\n'
+       '\tif( type != IE_FingerUp && g_pfnGMPTouchBlocked && g_pfnGMPTouchBlocked() )\n'
+       '\t\treturn;\n')
+# GMod's weapon scripts live in scripts/weapons/ (garrysmod_dir.vpk); their c_* viewmodels have no
+# arms (GMod adds gmod_hands), so the HL2 v_* model is used when the content has one.
+change('game/shared/weapon_parse.cpp',
+       '\tif ( !pKV )\n\t\treturn false;\n\n\tpFileInfo->Parse( pKV, szWeaponName );',
+       '\tif ( !pKV )\n'
+       '\t{\n'
+       '\t\t// GModPort: GMod keeps its weapon scripts in scripts/weapons/ inside garrysmod_dir.vpk (GAME, plain .txt).\n'
+       '\t\tQ_snprintf( sz, sizeof( sz ), "scripts/weapons/%s", szWeaponName );\n'
+       '\t\tpKV = ReadEncryptedKVFile( filesystem, sz, NULL );\n'
+       '\t\t// Its c_* viewmodels have no arms (GMod adds them as a separate gmod_hands entity):\n'
+       '\t\t// use the HL2 v_* model with arms when the content has one.\n'
+       '\t\tconst char *pszView = pKV ? pKV->GetString( "viewmodel", "" ) : "";\n'
+       '\t\tconst char *pszC = Q_strstr( pszView, "/c_" );\n'
+       '\t\tif ( pszC )\n'
+       '\t\t{\n'
+       '\t\t\tchar szV[MAX_WEAPON_STRING];\n'
+       '\t\t\tQ_strncpy( szV, pszView, sizeof( szV ) );\n'
+       '\t\t\tszV[pszC - pszView + 1] = \'v\';\n'
+       '\t\t\tif ( filesystem->FileExists( szV, "GAME" ) )\n'
+       '\t\t\t\tpKV->SetString( "viewmodel", szV );\n'
+       '\t\t}\n'
+       '\t}\n'
+       '\n'
+       '\tif ( !pKV )\n\t\treturn false;\n\n\tpFileInfo->Parse( pKV, szWeaponName );')
+# GMod has no suit power: sprint, flashlight and air never run out.
+before='\t// Suitpower cheat on?\n\tif ( sv_infinite_aux_power.GetBool() )\n\t\treturn true;\n'
+change('game/server/hl2/hl2_player.cpp', before,
+       before+'#ifdef HL2MP\n'
+       '\t// GModPort: GMod has no suit power; sprint, flashlight and air never run out.\n'
+       '\tif ( flPower >= 0.0f )\n'
+       '\t\treturn true;\n'
+       '#endif\n')
 print(json.dumps({'engine_commit':pin,'platform_files_patched':changes,'game_code_modified':False},indent=2))

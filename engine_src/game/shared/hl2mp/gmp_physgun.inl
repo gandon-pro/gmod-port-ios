@@ -1,15 +1,16 @@
 //========= GModPort ==========================================================//
 //
-// Purpose: GMod-style physgun (weapon_physgun) and a one-item test spawn menu.
+// Purpose: GMod-style physgun (weapon_physgun) and spawn menu.
 //          Included at the end of weapon_physcannon.cpp to reuse CGrabController.
 //
 //          +attack   grab a physics object and carry it at the grab distance
 //          +attack2  while carrying: freeze it in place
-//          +menu     toggle the spawn menu (gmp_spawn <model> on the server)
+//          +menu     toggle the spawn menu (gmp_spawn / gmp_give / gmp_ammo on the server)
 //
 //=============================================================================//
 
-#define GMP_SPAWN_TEST_MODEL "models/props_junk/popcan01a.mdl"
+#include "filesystem.h"
+#include "ammodef.h"
 
 #ifdef CLIENT_DLL
 #define CWeaponGMPPhysGun C_WeaponGMPPhysGun
@@ -86,8 +87,6 @@ IMPLEMENT_ACTTABLE( CWeaponGMPPhysGun );
 void CWeaponGMPPhysGun::Precache( void )
 {
 	BaseClass::Precache();
-	// Spawned props must not be a late precache.
-	PrecacheModel( GMP_SPAWN_TEST_MODEL );
 }
 
 void CWeaponGMPPhysGun::ItemPostFrame( void )
@@ -203,26 +202,34 @@ void CWeaponGMPPhysGun::Carry( CBasePlayer *pOwner )
 	m_grab.SetTargetPosition( end - offset, angles );
 }
 
-CON_COMMAND( gmp_spawn, "GModPort: gmp_spawn <models/...mdl> - spawn a physics prop where you look" )
+// gmp_spawn <models/...mdl> [skin]: spawn a prop where you look, resting on the surface as in
+// GMod. Models without a collision model become a solid prop_dynamic instead of failing.
+CON_COMMAND( gmp_spawn, "GModPort: gmp_spawn <models/...mdl> [skin] - spawn a prop where you look" )
 {
 	CBasePlayer *pPlayer = UTIL_GetCommandClient();
 	if ( !pPlayer || args.ArgC() < 2 )
 		return;
 	const char *pModel = args[1];
-	if ( Q_strnicmp( pModel, "models/", 7 ) || Q_strstr( pModel, ".." ) )
+	if ( Q_strnicmp( pModel, "models/", 7 ) || Q_strstr( pModel, ".." ) || !filesystem->FileExists( pModel, "GAME" ) )
 		return;
 
 	Vector start = pPlayer->EyePosition();
 	Vector forward;
 	pPlayer->EyeVectors( &forward );
 	trace_t tr;
-	UTIL_TraceLine( start, start + forward * 512, MASK_SOLID, pPlayer, COLLISION_GROUP_NONE, &tr );
+	UTIL_TraceLine( start, start + forward * 1024, MASK_SOLID, pPlayer, COLLISION_GROUP_NONE, &tr );
 
-	CBaseEntity *pProp = CreateEntityByName( "prop_physics" );
+	const model_t *pMdl = modelinfo->GetModel( CBaseEntity::PrecacheModel( pModel ) );
+	const bool bPhysics = pMdl && modelinfo->GetVCollide( pMdl );
+	CBaseEntity *pProp = CreateEntityByName( bPhysics ? "prop_physics_override" : "prop_dynamic_override" );
 	if ( !pProp )
 		return;
 	pProp->KeyValue( "model", pModel );
-	pProp->SetAbsOrigin( tr.endpos + tr.plane.normal * 8 );
+	if ( args.ArgC() > 2 )
+		pProp->KeyValue( "skin", args[2] );
+	if ( !bPhysics )
+		pProp->KeyValue( "solid", "2" );
+	pProp->SetAbsOrigin( tr.endpos );
 	pProp->SetAbsAngles( QAngle( 0, pPlayer->EyeAngles().y + 180, 0 ) );
 	if ( DispatchSpawn( pProp ) < 0 )
 	{
@@ -230,39 +237,375 @@ CON_COMMAND( gmp_spawn, "GModPort: gmp_spawn <models/...mdl> - spawn a physics p
 		return;
 	}
 	pProp->Activate();
-	Msg( "gmp_spawn: %s at %.0f %.0f %.0f\n", pModel, tr.endpos.x, tr.endpos.y, tr.endpos.z );
+	Vector origin = tr.endpos - tr.plane.normal * pProp->CollisionProp()->OBBMins().z;
+	pProp->Teleport( &origin, NULL, NULL );
+	Msg( "gmp_spawn: %s at %.0f %.0f %.0f\n", pModel, origin.x, origin.y, origin.z );
+}
+
+// gmp_give <weapon_...>: the spawn menu's Weapons tab. Gives the weapon (once) plus ammo and
+// switches to it.
+CON_COMMAND( gmp_give, "GModPort: gmp_give <weapon_...> - give a weapon from the spawn menu" )
+{
+	CBasePlayer *pPlayer = UTIL_GetCommandClient();
+	if ( !pPlayer || !pPlayer->IsAlive() || args.ArgC() < 2 || Q_strnicmp( args[1], "weapon_", 7 ) )
+		return;
+	pPlayer->GiveNamedItem( args[1] );
+	CBaseCombatWeapon *pWeapon = pPlayer->Weapon_OwnsThisType( args[1] );
+	if ( !pWeapon )
+		return;
+	if ( pWeapon->GetPrimaryAmmoType() >= 0 )
+		pPlayer->GiveAmmo( MAX( pWeapon->GetMaxClip1(), 1 ) * 3, pWeapon->GetPrimaryAmmoType() );
+	if ( pWeapon->GetSecondaryAmmoType() >= 0 )
+		pPlayer->GiveAmmo( 1, pWeapon->GetSecondaryAmmoType() );
+	pPlayer->Weapon_Switch( pWeapon );
+}
+
+// gmp_ammo <ammo type>|all: the Weapons tab's ammo boxes. Fills that ammo type to its max carry.
+CON_COMMAND( gmp_ammo, "GModPort: gmp_ammo <Pistol|SMG1|...|all> - fill an ammo type from the spawn menu" )
+{
+	CBasePlayer *pPlayer = UTIL_GetCommandClient();
+	if ( !pPlayer || !pPlayer->IsAlive() || args.ArgC() < 2 )
+		return;
+	const bool bAll = !Q_stricmp( args[1], "all" );
+	const int index = bAll ? -1 : GetAmmoDef()->Index( args[1] );
+	if ( !bAll && index < 0 )
+		return;
+	for ( int i = 1; i < GetAmmoDef()->m_nAmmoIndex; i++ )	// 0 is the invalid type
+		if ( bAll || i == index )
+			pPlayer->GiveAmmo( GetAmmoDef()->MaxCarry( i ), i );
 }
 #endif // !CLIENT_DLL
 
 #ifdef CLIENT_DLL
-#include "vgui_controls/Frame.h"
-#include "vgui_controls/Button.h"
+#include "vgui_controls/EditablePanel.h"
+#include "vgui/IInput.h"
+#include "vgui/ISurface.h"
+#include "vgui/IScheme.h"
+#include "vgui/ILocalize.h"
+#include "matsys_controls/mdlpanel.h"
+#include "datacache/imdlcache.h"
 #include "ienginevgui.h"
 
-class CGMPSpawnMenu : public vgui::Frame
+#ifdef CreateFont
+#undef CreateFont
+#endif
+
+// GMod-style spawn menu: GMod's own spawnlists (settings/spawnlist*/ *.txt) on the left, a grid
+// of live model icons on the right, a Weapons tab. Drag scrolls, a tap spawns.
+
+struct GMPSpawnItem
 {
-	DECLARE_CLASS_SIMPLE( CGMPSpawnMenu, vgui::Frame );
-public:
-	CGMPSpawnMenu( vgui::VPANEL parent ) : BaseClass( NULL, "GMPSpawnMenu" )
+	CUtlString model;	// empty: a header row
+	CUtlString text;	// header text or the label under the icon
+	CUtlString command;	// client command run on tap
+	int skin;
+};
+
+struct GMPSpawnList
+{
+	CUtlString name;
+	int id, parent, depth;
+	bool needsApp;
+	CUtlVector<GMPSpawnItem> items;
+};
+
+static CUtlVector<GMPSpawnList *> g_GMPSpawnLists;	// tree order: every list followed by its children
+static CUtlVector<GMPSpawnItem> g_GMPWeapons;
+
+static const struct { const char *cls, *name, *model; } s_GMPWeaponTable[] =
+{
+	{ "weapon_physgun", "Physics Gun", "models/weapons/w_physics.mdl" },
+	{ "weapon_physcannon", "Gravity Gun", "models/weapons/w_physics.mdl" },
+	{ "weapon_crowbar", "Crowbar", "models/weapons/w_crowbar.mdl" },
+	{ "weapon_stunstick", "Stunstick", "models/weapons/w_stunbaton.mdl" },
+	{ "weapon_pistol", "9mm Pistol", "models/weapons/w_pistol.mdl" },
+	{ "weapon_357", ".357 Magnum", "models/weapons/w_357.mdl" },
+	{ "weapon_smg1", "SMG", "models/weapons/w_smg1.mdl" },
+	{ "weapon_ar2", "Pulse-Rifle", "models/weapons/w_irifle.mdl" },
+	{ "weapon_shotgun", "Shotgun", "models/weapons/w_shotgun.mdl" },
+	{ "weapon_crossbow", "Crossbow", "models/weapons/w_crossbow.mdl" },
+	{ "weapon_frag", "Grenade", "models/weapons/w_grenade.mdl" },
+	{ "weapon_rpg", "RPG Launcher", "models/weapons/w_rocket_launcher.mdl" },
+	{ "weapon_slam", "S.L.A.M", "models/weapons/w_slam.mdl" },
+	{ "weapon_bugbait", "Bugbait", "models/weapons/w_bugbait.mdl" },
+	{ "weapon_annabelle", "Annabelle", "models/weapons/w_annabelle.mdl" },
+};
+
+// Ammo boxes: gmp_ammo <type> (hl2mp_gamerules.cpp ammo names).
+static const struct { const char *type, *name, *model; } s_GMPAmmoTable[] =
+{
+	{ "all", "All Ammo", "models/items/ammocrate_smg1.mdl" },
+	{ "Pistol", "Pistol Ammo", "models/items/boxsrounds.mdl" },
+	{ "357", ".357 Ammo", "models/items/357ammo.mdl" },
+	{ "SMG1", "SMG Ammo", "models/items/boxmrounds.mdl" },
+	{ "SMG1_Grenade", "SMG Grenades", "models/items/ar2_grenade.mdl" },
+	{ "AR2", "Pulse Ammo", "models/items/combine_rifle_cartridge01.mdl" },
+	{ "AR2AltFire", "Combine Balls", "models/items/combine_rifle_ammo01.mdl" },
+	{ "Buckshot", "Shotgun Ammo", "models/items/boxbuckshot.mdl" },
+	{ "XBowBolt", "Crossbow Bolts", "models/items/crossbowrounds.mdl" },
+	{ "RPG_Round", "RPG Rockets", "models/weapons/w_missile_closed.mdl" },
+	{ "Grenade", "Grenades", "models/weapons/w_grenade.mdl" },
+	{ "slam", "S.L.A.M", "models/weapons/w_slam.mdl" },
+};
+
+static int GMP_CompareStrings( const CUtlString *a, const CUtlString *b )
+{
+	return Q_stricmp( a->Get(), b->Get() );
+}
+
+static void GMP_AddSpawnListTree( CUtlVector<GMPSpawnList *> &all, int parent, int depth )
+{
+	for ( int i = 0; i < all.Count(); i++ )
 	{
-		SetParent( parent );
-		SetTitle( "Spawn", true );
-		SetSizeable( false );
-		SetDeleteSelfOnClose( false );
-		m_pCan = new vgui::Button( this, "PopCan", "Pop can", this, "spawn_popcan" );
-		SetVisible( false );
+		GMPSpawnList *list = all[i];
+		if ( list->parent != parent || list->needsApp )
+			continue;
+		list->depth = depth;
+		g_GMPSpawnLists.AddToTail( list );
+		if ( list->id != parent )
+			GMP_AddSpawnListTree( all, list->id, depth + 1 );
+	}
+}
+
+static void GMP_LoadSpawnMenu( void )
+{
+	if ( g_GMPSpawnLists.Count() )
+		return;
+
+	// GMod copies spawnlist_default to settings/spawnlist on first run and edits that copy.
+	const char *dir = filesystem->IsDirectory( "settings/spawnlist", "GAME" ) ? "settings/spawnlist" : "settings/spawnlist_default";
+	char path[MAX_PATH];
+	Q_snprintf( path, sizeof( path ), "%s/*.txt", dir );
+	CUtlVector<CUtlString> files;
+	FileFindHandle_t hFind;
+	for ( const char *name = filesystem->FindFirstEx( path, "GAME", &hFind ); name; name = filesystem->FindNext( hFind ) )
+		files.AddToTail( name );
+	filesystem->FindClose( hFind );
+	files.Sort( GMP_CompareStrings );
+
+	CUtlVector<GMPSpawnList *> all;
+	for ( int i = 0; i < files.Count(); i++ )
+	{
+		if ( i && !Q_stricmp( files[i].Get(), files[i - 1].Get() ) )
+			continue;	// same file in two search paths
+		Q_snprintf( path, sizeof( path ), "%s/%s", dir, files[i].Get() );
+		KeyValues *kv = new KeyValues( "spawnlist" );
+		if ( kv->LoadFromFile( filesystem, path, "GAME" ) )
+		{
+			GMPSpawnList *list = new GMPSpawnList;
+			list->name = kv->GetString( "name", files[i].Get() );
+			list->id = kv->GetInt( "id" );
+			list->parent = kv->GetInt( "parentid" );
+			list->depth = 0;
+			// Lists for other games' content (Portal, TF2, CS...): not mounted on the phone.
+			list->needsApp = kv->GetString( "needsapp" )[0] != 0;
+			KeyValues *contents = kv->FindKey( "contents" );
+			for ( KeyValues *sub = contents ? contents->GetFirstTrueSubKey() : NULL; sub; sub = sub->GetNextTrueSubKey() )
+			{
+				GMPSpawnItem item;
+				item.skin = sub->GetInt( "skin" );
+				const char *type = sub->GetString( "type" );
+				if ( !Q_stricmp( type, "model" ) && sub->GetString( "model" )[0] )
+				{
+					item.model = sub->GetString( "model" );
+					char cmd[MAX_PATH + 32];
+					Q_snprintf( cmd, sizeof( cmd ), "gmp_spawn \"%s\" %d", item.model.Get(), item.skin );
+					item.command = cmd;
+				}
+				else if ( !Q_stricmp( type, "header" ) )
+					item.text = sub->GetString( "text" );
+				else
+					continue;
+				list->items.AddToTail( item );
+			}
+			all.AddToTail( list );
+		}
+		kv->deleteThis();
+	}
+	GMP_AddSpawnListTree( all, 0, 0 );
+	DevMsg( "GModPort: %d spawnlists from %s (%d shown)\n", all.Count(), dir, g_GMPSpawnLists.Count() );
+
+	GMPSpawnItem header;
+	header.text = "Half-Life 2";
+	header.skin = 0;
+	g_GMPWeapons.AddToTail( header );
+	for ( int i = 0; i < ARRAYSIZE( s_GMPWeaponTable ); i++ )
+	{
+		GMPSpawnItem item;
+		item.model = s_GMPWeaponTable[i].model;
+		item.text = s_GMPWeaponTable[i].name;
+		char cmd[64];
+		Q_snprintf( cmd, sizeof( cmd ), "gmp_give %s", s_GMPWeaponTable[i].cls );
+		item.command = cmd;
+		item.skin = 0;
+		g_GMPWeapons.AddToTail( item );
+	}
+	header.text = "Ammo";
+	g_GMPWeapons.AddToTail( header );
+	for ( int i = 0; i < ARRAYSIZE( s_GMPAmmoTable ); i++ )
+	{
+		GMPSpawnItem item;
+		item.model = s_GMPAmmoTable[i].model;
+		item.text = s_GMPAmmoTable[i].name;
+		char cmd[64];
+		Q_snprintf( cmd, sizeof( cmd ), "gmp_ammo %s", s_GMPAmmoTable[i].type );
+		item.command = cmd;
+		item.skin = 0;
+		g_GMPWeapons.AddToTail( item );
+	}
+}
+
+// Touch-friendly scrolling: press, drag past a threshold to scroll, release without a drag to tap.
+class CGMPDragPanel : public vgui::Panel
+{
+	DECLARE_CLASS_SIMPLE( CGMPDragPanel, vgui::Panel );
+public:
+	CGMPDragPanel( vgui::Panel *parent, const char *name ) : BaseClass( parent, name ),
+		m_nScroll( 0 ), m_nContentTall( 0 ), m_bPressed( false ), m_bDragged( false ) {}
+
+	void SetScroll( int scroll )
+	{
+		scroll = clamp( scroll, 0, MAX( 0, m_nContentTall - GetTall() ) );
+		if ( scroll != m_nScroll )
+		{
+			m_nScroll = scroll;
+			OnScrolled();
+		}
 	}
 
-	void Toggle( void )
+	virtual void OnMousePressed( vgui::MouseCode code )
 	{
-		if ( IsVisible() )
-		{
-			Close();
+		if ( code != MOUSE_LEFT )
 			return;
+		vgui::input()->GetCursorPos( m_nPressX, m_nPressY );
+		ScreenToLocal( m_nPressX, m_nPressY );
+		m_nPressScroll = m_nScroll;
+		m_bPressed = true;
+		m_bDragged = false;
+		vgui::input()->SetMouseCapture( GetVPanel() );
+	}
+
+	virtual void OnCursorMoved( int x, int y )
+	{
+		if ( !m_bPressed )
+			return;
+		if ( abs( y - m_nPressY ) > GetTall() / 40 )
+			m_bDragged = true;
+		if ( m_bDragged )
+			SetScroll( m_nPressScroll - ( y - m_nPressY ) );
+	}
+
+	virtual void OnMouseReleased( vgui::MouseCode code )
+	{
+		if ( code != MOUSE_LEFT || !m_bPressed )
+			return;
+		m_bPressed = false;
+		vgui::input()->SetMouseCapture( NULL );
+		if ( !m_bDragged )
+			OnTap( m_nPressX, m_nPressY + m_nScroll );
+	}
+
+	virtual void OnMouseWheeled( int delta ) { SetScroll( m_nScroll - delta * GetTall() / 6 ); }
+
+protected:
+	virtual void OnScrolled( void ) { Repaint(); }
+	virtual void OnTap( int x, int y ) = 0;	// content coordinates
+
+	int m_nScroll, m_nContentTall;
+
+private:
+	bool m_bPressed, m_bDragged;
+	int m_nPressX, m_nPressY, m_nPressScroll;
+};
+
+// The left column: spawnlists as an always-expanded tree.
+class CGMPSpawnListPanel : public CGMPDragPanel
+{
+	DECLARE_CLASS_SIMPLE( CGMPSpawnListPanel, CGMPDragPanel );
+public:
+	CGMPSpawnListPanel( vgui::Panel *parent ) : BaseClass( parent, "SpawnLists" ), m_hFont( 0 ), m_hTitleFont( 0 ), m_nSelected( 0 ) {}
+
+	void SetFonts( vgui::HFont font, vgui::HFont title ) { m_hFont = font; m_hTitleFont = title; InvalidateLayout(); }
+	int Selected( void ) const { return m_nSelected; }
+
+	virtual void PerformLayout( void )
+	{
+		BaseClass::PerformLayout();
+		m_nRow = MAX( 1, vgui::surface()->GetFontTall( m_hFont ) * 2 );
+		m_nContentTall = m_nRow * ( g_GMPSpawnLists.Count() + 1 );
+		SetScroll( m_nScroll );
+	}
+
+	virtual void Paint( void )
+	{
+		int w, h;
+		GetSize( w, h );
+		vgui::surface()->DrawSetColor( 255, 255, 255, 255 );
+		vgui::surface()->DrawFilledRect( 0, 0, w, h );
+		DrawText( m_hTitleFont, m_nRow / 3, -m_nScroll, "Your Spawnlists", Color( 40, 40, 40, 255 ) );
+		for ( int i = 0; i < g_GMPSpawnLists.Count(); i++ )
+		{
+			const int y = ( i + 1 ) * m_nRow - m_nScroll;
+			if ( y + m_nRow < 0 || y > h )
+				continue;
+			const bool selected = i == m_nSelected;
+			if ( selected )
+			{
+				vgui::surface()->DrawSetColor( 60, 140, 230, 255 );
+				vgui::surface()->DrawFilledRect( 0, y, w, y + m_nRow );
+			}
+			const GMPSpawnList *list = g_GMPSpawnLists[i];
+			DrawText( m_hFont, m_nRow / 3 + list->depth * m_nRow * 2 / 3, y, list->name.Get(),
+				selected ? Color( 255, 255, 255, 255 ) : Color( 40, 40, 40, 255 ) );
 		}
-		int w = ScreenWidth() / 3, h = ScreenHeight() / 3;
-		SetBounds( ( ScreenWidth() - w ) / 2, ( ScreenHeight() - h ) / 2, w, h );
-		Activate();
+		vgui::surface()->DrawSetColor( 160, 160, 160, 255 );
+		vgui::surface()->DrawOutlinedRect( 0, 0, w, h );
+	}
+
+protected:
+	virtual void OnTap( int x, int y )
+	{
+		const int i = y / m_nRow - 1;
+		if ( i < 0 || i >= g_GMPSpawnLists.Count() )
+			return;
+		m_nSelected = i;
+		Repaint();
+		PostActionSignal( new KeyValues( "SpawnListSelected", "index", i ) );
+	}
+
+private:
+	void DrawText( vgui::HFont font, int x, int y, const char *text, Color color )
+	{
+		wchar_t wide[128];
+		g_pVGuiLocalize->ConvertANSIToUnicode( text, wide, sizeof( wide ) );
+		vgui::surface()->DrawSetTextFont( font );
+		vgui::surface()->DrawSetTextColor( color );
+		vgui::surface()->DrawSetTextPos( x, y + ( m_nRow - vgui::surface()->GetFontTall( font ) ) / 2 );
+		vgui::surface()->DrawPrintText( wide, wcslen( wide ) );
+	}
+
+	vgui::HFont m_hFont, m_hTitleFont;
+	int m_nSelected, m_nRow;
+};
+
+// The icon grid. Headers take a row of their own; the icons are a pool of CMDLPanels that
+// follow the visible cells, so only what is on screen is loaded and rendered.
+class CGMPSpawnGrid : public CGMPDragPanel
+{
+	DECLARE_CLASS_SIMPLE( CGMPSpawnGrid, CGMPDragPanel );
+public:
+	CGMPSpawnGrid( vgui::Panel *parent ) : BaseClass( parent, "SpawnGrid" ), m_pItems( NULL ), m_hFont( 0 ), m_hHeaderFont( 0 ) {}
+
+	void SetFonts( vgui::HFont font, vgui::HFont header ) { m_hFont = font; m_hHeaderFont = header; InvalidateLayout(); }
+
+	void SetItems( const CUtlVector<GMPSpawnItem> *pItems )
+	{
+		m_pItems = pItems;
+		m_nScroll = 0;
+		for ( int i = 0; i < m_Cells.Count(); i++ )
+			m_Cells[i].item = -1;
+		InvalidateLayout();
+		Repaint();
 	}
 
 	virtual void PerformLayout( void )
@@ -270,32 +613,385 @@ public:
 		BaseClass::PerformLayout();
 		int w, h;
 		GetSize( w, h );
-		m_pCan->SetBounds( w / 8, h / 4, w * 3 / 4, h / 2 );
+		m_nCell = MAX( 32, h / 4 );
+		m_nGap = m_nCell / 14;
+		const int cols = MAX( 1, ( w - m_nGap ) / ( m_nCell + m_nGap ) );
+		m_nCell = ( w - m_nGap ) / cols - m_nGap;	// fill the width
+		m_Places.RemoveAll();
+		int col = 0, y = m_nGap;
+		const int headerTall = vgui::surface()->GetFontTall( m_hHeaderFont ) * 3 / 2;
+		for ( int i = 0; m_pItems && i < m_pItems->Count(); i++ )
+		{
+			Place place = { i, 0, 0, 0, 0, false };
+			if ( ( *m_pItems )[i].model.IsEmpty() )
+			{
+				if ( col )
+					y += m_nCell + m_nGap;
+				col = 0;
+				place.x = m_nGap; place.y = y; place.w = w - 2 * m_nGap; place.h = headerTall;
+				y += headerTall + m_nGap;
+			}
+			else
+			{
+				place.x = m_nGap + col * ( m_nCell + m_nGap ); place.y = y; place.w = place.h = m_nCell;
+				if ( ++col == cols )
+				{
+					col = 0;
+					y += m_nCell + m_nGap;
+				}
+			}
+			m_Places.AddToTail( place );
+		}
+		m_nContentTall = y + ( col ? m_nCell + m_nGap : 0 );
+		SetScroll( m_nScroll );
+		UpdateCells();
 	}
 
-	virtual void OnCommand( const char *command )
+	virtual void Paint( void )
 	{
-		if ( !Q_strcmp( command, "spawn_popcan" ) )
+		int w, h;
+		GetSize( w, h );
+		vgui::surface()->DrawSetColor( 227, 227, 227, 255 );
+		vgui::surface()->DrawFilledRect( 0, 0, w, h );
+		for ( int i = 0; i < m_Places.Count(); i++ )
 		{
-			engine->ClientCmd( "gmp_spawn " GMP_SPAWN_TEST_MODEL );
-			Close();
+			const Place &place = m_Places[i];
+			const int y = place.y - m_nScroll;
+			if ( y + place.h < 0 || y > h )
+				continue;
+			const GMPSpawnItem &item = ( *m_pItems )[place.item];
+			if ( item.model.IsEmpty() )
+			{
+				DrawText( m_hHeaderFont, place.x, y, place.w, place.h, item.text.Get(), Color( 60, 60, 60, 255 ), false );
+				vgui::surface()->DrawSetColor( 160, 160, 160, 255 );
+				vgui::surface()->DrawFilledRect( place.x, y + place.h - 2, place.x + place.w, y + place.h );
+				continue;
+			}
+			vgui::surface()->DrawSetColor( 255, 255, 255, 255 );
+			vgui::surface()->DrawFilledRect( place.x, y, place.x + place.w, y + place.h );
+			vgui::surface()->DrawSetColor( 170, 170, 170, 255 );
+			vgui::surface()->DrawOutlinedRect( place.x, y, place.x + place.w, y + place.h );
+			if ( place.missing )
+			{
+				// Not in the mounted content: show the file name instead of an icon.
+				DrawText( m_hFont, place.x, y, place.w, place.h, V_UnqualifiedFileName( item.model.Get() ), Color( 150, 60, 60, 255 ), true );
+			}
+			else if ( !item.text.IsEmpty() )
+			{
+				// The icon panel stops above this strip (UpdateCells), so the label is not covered.
+				const int labelTall = vgui::surface()->GetFontTall( m_hFont ) * 3 / 2;
+				DrawText( m_hFont, place.x, y + place.h - labelTall, place.w, labelTall, item.text.Get(), Color( 40, 40, 40, 255 ), true );
+			}
+		}
+	}
+
+protected:
+	virtual void OnScrolled( void )
+	{
+		UpdateCells();
+		Repaint();
+	}
+
+	virtual void OnTap( int x, int y )
+	{
+		for ( int i = 0; i < m_Places.Count(); i++ )
+		{
+			const Place &place = m_Places[i];
+			const GMPSpawnItem &item = ( *m_pItems )[place.item];
+			if ( item.command.IsEmpty() || x < place.x || x >= place.x + place.w || y < place.y || y >= place.y + place.h )
+				continue;
+			vgui::surface()->PlaySound( "ui/buttonclickrelease.wav" );
+			engine->ClientCmd( item.command.Get() );
 			return;
 		}
-		BaseClass::OnCommand( command );
 	}
 
 private:
-	vgui::Button *m_pCan;
+	struct Place { int item, x, y, w, h; bool missing; };
+	struct Cell { CMDLPanel *panel; int item; };
+
+	void UpdateCells( void )
+	{
+		if ( !m_pItems )
+			return;
+		const int h = GetTall();
+		// Free the cells whose item scrolled out.
+		for ( int c = 0; c < m_Cells.Count(); c++ )
+		{
+			const int p = PlaceOf( m_Cells[c].item );
+			if ( p < 0 || !IsShown( m_Places[p], h ) )
+				m_Cells[c].item = -1;
+		}
+		for ( int p = 0; p < m_Places.Count(); p++ )
+		{
+			Place &place = m_Places[p];
+			if ( ( *m_pItems )[place.item].model.IsEmpty() || !IsShown( place, h ) )
+				continue;
+			int c = CellOf( place.item );
+			if ( c < 0 )
+			{
+				c = CellOf( -1 );
+				if ( c < 0 )
+				{
+					Cell cell = { new CMDLPanel( this, "SpawnIcon" ), -1 };
+					cell.panel->SetMouseInputEnabled( false );
+					cell.panel->SetKeyBoardInputEnabled( false );
+					cell.panel->SetBackgroundColor( 255, 255, 255 );
+					c = m_Cells.AddToTail( cell );
+				}
+				m_Cells[c].item = place.item;
+				place.missing = !LoadIcon( m_Cells[c].panel, ( *m_pItems )[place.item] );
+			}
+			const int inset = MAX( 2, m_nGap / 2 );
+			const int labelTall = ( *m_pItems )[place.item].text.IsEmpty() ? 0 : vgui::surface()->GetFontTall( m_hFont ) * 3 / 2;
+			m_Cells[c].panel->SetBounds( place.x + inset, place.y - m_nScroll + inset, place.w - 2 * inset, place.h - 2 * inset - labelTall );
+			m_Cells[c].panel->SetVisible( !place.missing );
+		}
+		for ( int c = 0; c < m_Cells.Count(); c++ )
+			if ( m_Cells[c].item < 0 )
+				m_Cells[c].panel->SetVisible( false );
+	}
+
+	static bool LoadIcon( CMDLPanel *panel, const GMPSpawnItem &item )
+	{
+		MDLHandle_t hMDL = mdlcache->FindMDL( item.model.Get() );
+		mdlcache->GetStudioHdr( hMDL );	// loads it; a missing file becomes the error model
+		const bool ok = !mdlcache->IsErrorModel( hMDL );
+		panel->SetMDL( ok ? hMDL : MDLHANDLE_INVALID );
+		mdlcache->Release( hMDL );
+		if ( !ok )
+			return false;
+		panel->SetSkin( item.skin );
+		// GMod's spawn icon view: from the front left, slightly above.
+		panel->SetCameraPositionAndAngles( vec3_origin, QAngle( 25, 220, 0 ) );
+		panel->LookAtMDL();
+		return true;
+	}
+
+	bool IsShown( const Place &place, int h ) const { return place.y - m_nScroll + place.h > 0 && place.y - m_nScroll < h; }
+
+	int PlaceOf( int item ) const
+	{
+		for ( int p = 0; item >= 0 && p < m_Places.Count(); p++ )
+			if ( m_Places[p].item == item )
+				return p;
+		return -1;
+	}
+
+	int CellOf( int item ) const
+	{
+		for ( int c = 0; c < m_Cells.Count(); c++ )
+			if ( m_Cells[c].item == item )
+				return c;
+		return -1;
+	}
+
+	void DrawText( vgui::HFont font, int x, int y, int w, int h, const char *text, Color color, bool center )
+	{
+		wchar_t wide[128];
+		g_pVGuiLocalize->ConvertANSIToUnicode( text, wide, sizeof( wide ) );
+		int tw, th;
+		vgui::surface()->GetTextSize( font, wide, tw, th );
+		vgui::surface()->DrawSetTextFont( font );
+		vgui::surface()->DrawSetTextColor( color );
+		vgui::surface()->DrawSetTextPos( center ? x + MAX( 0, ( w - tw ) / 2 ) : x + th / 4, y + ( h - th ) / 2 );
+		vgui::surface()->DrawPrintText( wide, wcslen( wide ) );
+	}
+
+	const CUtlVector<GMPSpawnItem> *m_pItems;
+	CUtlVector<Place> m_Places;
+	CUtlVector<Cell> m_Cells;
+	vgui::HFont m_hFont, m_hHeaderFont;
+	int m_nCell, m_nGap;
 };
 
+class CGMPSpawnMenu : public vgui::EditablePanel
+{
+	DECLARE_CLASS_SIMPLE( CGMPSpawnMenu, vgui::EditablePanel );
+public:
+	CGMPSpawnMenu( vgui::VPANEL parent ) : BaseClass( NULL, "GMPSpawnMenu" ),
+		m_hTabFont( 0 ), m_hListFont( 0 ), m_hHeaderFont( 0 ), m_hLabelFont( 0 ), m_nTab( 0 )
+	{
+		SetParent( parent );
+		// A popup so vgui shows the cursor and gets taps; no keyboard, so the +menu bind still closes it.
+		MakePopup( false );
+		SetKeyBoardInputEnabled( false );
+		SetMouseInputEnabled( true );
+		SetPaintBackgroundEnabled( false );
+		m_pLists = new CGMPSpawnListPanel( this );
+		m_pLists->AddActionSignalTarget( this );
+		m_pGrid = new CGMPSpawnGrid( this );
+		SetVisible( false );
+	}
+
+	void Toggle( void )
+	{
+		if ( IsVisible() )
+		{
+			SetVisible( false );
+			return;
+		}
+		GMP_LoadSpawnMenu();
+		SetBounds( 0, 0, ScreenWidth(), ScreenHeight() );
+		SelectTab( m_nTab );
+		SetVisible( true );
+		MoveToFront();
+	}
+
+	virtual void ApplySchemeSettings( vgui::IScheme *pScheme )
+	{
+		BaseClass::ApplySchemeSettings( pScheme );
+		const char *family = vgui::surface()->GetFontFamilyName( pScheme->GetFont( "Default", false ) );
+		if ( !family || !*family )
+			family = "Verdana";
+		const int tall = ScreenHeight();
+		m_hTabFont = MakeFont( family, tall / 28, 700 );
+		m_hListFont = MakeFont( family, tall / 34, 500 );
+		m_hHeaderFont = MakeFont( family, tall / 26, 800 );
+		m_hLabelFont = MakeFont( family, tall / 50, 500 );
+		m_pLists->SetFonts( m_hListFont, m_hTabFont );
+		m_pGrid->SetFonts( m_hLabelFont, m_hHeaderFont );
+	}
+
+	virtual void PerformLayout( void )
+	{
+		BaseClass::PerformLayout();
+		int w, h;
+		GetSize( w, h );
+		// Landscape iPhones keep the notch and the home bar out of the side and bottom margins.
+		m_nX0 = w * 6 / 100; m_nX1 = w - w * 6 / 100;
+		m_nY0 = h / 30; m_nY1 = h - h / 20;
+		m_nTabTall = h / 11;
+		const int pad = h / 90;
+		const int top = m_nY0 + m_nTabTall + pad, bottom = m_nY1 - pad;
+		const int listWide = m_nTab == 0 ? ( m_nX1 - m_nX0 ) / 4 : 0;
+		m_pLists->SetVisible( listWide > 0 );
+		m_pLists->SetBounds( m_nX0 + pad, top, listWide, bottom - top );
+		const int gridX = m_nX0 + pad + ( listWide ? listWide + pad : 0 );
+		m_pGrid->SetBounds( gridX, top, m_nX1 - pad - gridX, bottom - top );
+	}
+
+	virtual void Paint( void )
+	{
+		vgui::surface()->DrawSetColor( 50, 50, 50, 240 );
+		vgui::surface()->DrawFilledRect( m_nX0, m_nY0 + m_nTabTall, m_nX1, m_nY1 );
+		for ( int i = 0; i <= ARRAYSIZE( s_Tabs ); i++ )
+		{
+			int x0, x1;
+			TabRect( i, x0, x1 );
+			const bool close = i == ARRAYSIZE( s_Tabs );
+			const bool active = i == m_nTab;
+			if ( close )
+				vgui::surface()->DrawSetColor( 200, 70, 60, 240 );
+			else if ( active )
+				vgui::surface()->DrawSetColor( 50, 50, 50, 240 );
+			else
+				vgui::surface()->DrawSetColor( 95, 95, 95, 230 );
+			vgui::surface()->DrawFilledRect( x0, m_nY0 + ( active || close ? 0 : m_nTabTall / 8 ), x1, m_nY0 + m_nTabTall );
+			wchar_t wide[32];
+			g_pVGuiLocalize->ConvertANSIToUnicode( close ? "X" : s_Tabs[i], wide, sizeof( wide ) );
+			int tw, th;
+			vgui::surface()->GetTextSize( m_hTabFont, wide, tw, th );
+			vgui::surface()->DrawSetTextFont( m_hTabFont );
+			vgui::surface()->DrawSetTextColor( active || close ? Color( 255, 255, 255, 255 ) : Color( 200, 200, 200, 255 ) );
+			vgui::surface()->DrawSetTextPos( ( x0 + x1 - tw ) / 2, m_nY0 + ( m_nTabTall - th ) / 2 );
+			vgui::surface()->DrawPrintText( wide, wcslen( wide ) );
+		}
+	}
+
+	virtual void OnMousePressed( vgui::MouseCode code )
+	{
+		int x, y;
+		vgui::input()->GetCursorPos( x, y );
+		ScreenToLocal( x, y );
+		if ( x < m_nX0 || x >= m_nX1 || y < m_nY0 || y >= m_nY1 )
+		{
+			SetVisible( false );	// tap outside closes, like letting go of Q in GMod
+			return;
+		}
+		if ( y >= m_nY0 + m_nTabTall )
+			return;
+		for ( int i = 0; i <= ARRAYSIZE( s_Tabs ); i++ )
+		{
+			int x0, x1;
+			TabRect( i, x0, x1 );
+			if ( x < x0 || x >= x1 )
+				continue;
+			if ( i == ARRAYSIZE( s_Tabs ) )
+				SetVisible( false );
+			else
+				SelectTab( i );
+			return;
+		}
+	}
+
+	MESSAGE_FUNC_INT( OnSpawnListSelected, "SpawnListSelected", index )
+	{
+		if ( g_GMPSpawnLists.IsValidIndex( index ) )
+			m_pGrid->SetItems( &g_GMPSpawnLists[index]->items );
+	}
+
+private:
+	static const char *const s_Tabs[2];
+
+	void SelectTab( int tab )
+	{
+		m_nTab = tab;
+		if ( tab == 0 )
+			OnSpawnListSelected( m_pLists->Selected() );
+		else
+			m_pGrid->SetItems( &g_GMPWeapons );
+		InvalidateLayout();
+		Repaint();
+	}
+
+	void TabRect( int i, int &x0, int &x1 ) const
+	{
+		const int wide = ( m_nX1 - m_nX0 ) / 6, gap = m_nTabTall / 12;
+		if ( i == ARRAYSIZE( s_Tabs ) )	// close button at the right end
+		{
+			x1 = m_nX1;
+			x0 = m_nX1 - m_nTabTall * 3 / 2;
+			return;
+		}
+		x0 = m_nX0 + i * ( wide + gap );
+		x1 = x0 + wide;
+	}
+
+	static vgui::HFont MakeFont( const char *family, int tall, int weight )
+	{
+		vgui::HFont font = vgui::surface()->CreateFont();
+		vgui::surface()->SetFontGlyphSet( font, family, tall, weight, 0, 0, vgui::ISurface::FONTFLAG_ANTIALIAS );
+		return font;
+	}
+
+	CGMPSpawnListPanel *m_pLists;
+	CGMPSpawnGrid *m_pGrid;
+	vgui::HFont m_hTabFont, m_hListFont, m_hHeaderFont, m_hLabelFont;
+	int m_nTab, m_nX0, m_nX1, m_nY0, m_nY1, m_nTabTall;
+};
+
+const char *const CGMPSpawnMenu::s_Tabs[2] = { "Spawnlists", "Weapons" };
+
 static vgui::DHANDLE<CGMPSpawnMenu> g_hGMPSpawnMenu;
+
+// Touch look/move stays off while the menu is open (cdll_client_int.cpp IN_TouchEvent), or
+// scrolling it would also turn the camera.
+extern bool ( *g_pfnGMPTouchBlocked )( void );
+static bool GMP_SpawnMenuIsOpen( void )
+{
+	return g_hGMPSpawnMenu.Get() && g_hGMPSpawnMenu->IsVisible();
+}
 
 // +menu toggles rather than shows-while-held: a touch button cannot stay pressed while
 // another finger taps the menu.
 static void GMP_SpawnMenuDown( const CCommand &args )
 {
 	if ( !g_hGMPSpawnMenu.Get() )
+	{
 		g_hGMPSpawnMenu = new CGMPSpawnMenu( enginevgui->GetPanel( PANEL_CLIENTDLL ) );
+		g_pfnGMPTouchBlocked = GMP_SpawnMenuIsOpen;
+	}
 	g_hGMPSpawnMenu->Toggle();
 }
 static void GMP_SpawnMenuUp( const CCommand &args ) {}

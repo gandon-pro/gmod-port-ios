@@ -1,8 +1,9 @@
 "GameInfo"
 {
 	game	"GModPort G1 - stock HL2MP"
-	title	"GModPort"
+	title	""
 	type	multiplayer_only
+	gamelogo	1
 
 	FileSystem
 	{
