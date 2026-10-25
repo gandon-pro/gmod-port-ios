@@ -20,6 +20,7 @@ def generate():
            'bool onFloor, onCeiling, noDrop; GMPNPCKey keys[8]; const char *weapons[8]; };',
            'static const GMPNPCDef s_GMPNPCs[] = {']
     assets=[]
+    native_count=len({r['Class'] for r in rows})
     for r in rows:
         assert re.fullmatch(r'[A-Za-z0-9_]+',r['id']) and re.fullmatch(r'[A-Za-z0-9_]+',r['Class'])
         assert r['Class'] in models
@@ -49,7 +50,7 @@ def generate():
     output=ROOT/'engine_src/game/shared/hl2mp/gmp_npc_catalog.h'
     output.write_text('\n'.join(lines)+'\n')
     (ROOT/'docs/npc_assets_for_claude.json').write_text(json.dumps({'npc_variants':len(rows),
-        'native_classes':len(models), 'content_only':True,
+        'native_classes':native_count, 'content_only':True,
         'required_groups':['models with .vvd/.vtx/.phy and referenced animation MDLs',
                            'referenced materials and textures', 'NPC weapon models and scripts',
                            'scripts/npc_sounds*.txt and their sound/ files',
@@ -57,6 +58,6 @@ def generate():
                            'cfg/skill_manifest.cfg, skill.cfg, skill1.cfg, skill2.cfg, skill3.cfg',
                            'maps/graphs/*.ain when supplied with the map'],
         'entries':assets},indent=2)+'\n')
-    print(f'Generated {len(rows)} NPC variants / {len(models)} native classes')
+    print(f'Generated {len(rows)} NPC variants / {native_count} native classes')
 
 if __name__=='__main__':generate()

@@ -6,10 +6,11 @@ static const GMPNPCDef& find(const char* id) {
     assert(false); return s_GMPNPCs[0];
 }
 int main() {
-    assert(sizeof(s_GMPNPCs)/sizeof(s_GMPNPCs[0])==61);
+    assert(sizeof(s_GMPNPCs)/sizeof(s_GMPNPCs[0])==60);
     for (const auto& n:s_GMPNPCs) {
         assert(*n.entityClass && *n.iconModel && n.offset>=0);
         assert(!std::strncmp(n.entityClass,"npc_",4));
+        assert(std::strcmp(n.entityClass,"npc_fisherman"));
         int count=0;
         for (const auto& other:s_GMPNPCs) if (!std::strcmp(other.id,n.id)) ++count;
         assert(count==1);

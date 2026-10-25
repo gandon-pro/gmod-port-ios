@@ -15,7 +15,6 @@
 {"Author":"VALVe","Category":"#spawnmenu.category.humans_resistance","Class":"npc_citizen","KeyValues":{"SquadName":"resistance","citizentype":2},"Name":"#npc_citizen_refugee","Weapons":["weapon_pistol","weapon_smg1"],"id":"Refugee"}
 {"Author":"VALVe","Category":"#spawnmenu.category.humans_resistance","Class":"npc_vortigaunt","KeyValues":{"SquadName":"resistance"},"Model":"models/vortigaunt_doctor.mdl","Name":"#npc_vortigaunt_uriah","id":"VortigauntUriah"}
 {"Author":"VALVe","Category":"#spawnmenu.category.humans_resistance","Class":"npc_magnusson","Name":"#npc_magnusson","Weapons":[""],"id":"npc_magnusson"}
-{"Author":"VALVe","Category":"#spawnmenu.category.humans_resistance","Class":"npc_fisherman","Name":"#npc_fisherman","Weapons":["weapon_oldmanharpoon"],"id":"npc_fisherman"}
 {"Author":"VALVe","Category":"#spawnmenu.category.humans_resistance","Class":"npc_turret_floor","KeyValues":{"SquadName":"resistance"},"Name":"#npc_turret_floor_resistance","Offset":2,"OnFloor":true,"Rotate":{"pitch":0,"roll":0,"yaw":180},"TotalSpawnFlags":512,"id":"npc_turret_floor_resistance"}
 {"Author":"VALVe","Category":"#spawnmenu.category.humans_resistance","Class":"npc_rollermine","KeyValues":{"SquadName":"resistance"},"Name":"#npc_rollermine_hacked","NoDrop":true,"Offset":20,"SpawnFlags":262144,"id":"npc_rollermine_hacked"}
 {"Author":"VALVe","Category":"#spawnmenu.category.humans_resistance","Class":"npc_manhack","KeyValues":{"SquadName":"resistance"},"Name":"#npc_manhack_hacked","NoDrop":true,"SpawnFlags":2097152,"id":"npc_manhack_hacked"}

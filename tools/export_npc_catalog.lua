@@ -6,7 +6,8 @@ SF_NPC_DROP_HEALTHKIT=8; SF_NPC_NO_PLAYER_PUSHAWAY=16384
 SF_FLOOR_TURRET_CITIZEN=512
 bit=require('bit')
 function Angle(p,y,r) return {pitch=p,yaw=y,roll=r} end
-function IsMounted(name) return name=='lostcoast' end
+-- Only the built-in HL2 + Episodes roster; mounted-game NPCs are excluded.
+function IsMounted(name) return false end
 local function json(v)
     local t=type(v)
     if t=='string' then return '"'..v:gsub('\\','\\\\'):gsub('"','\\"'):gsub('\n','\\n'):gsub('\r','\\r')..'"' end

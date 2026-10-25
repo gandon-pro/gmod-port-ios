@@ -20,7 +20,6 @@ static const GMPNPCDef s_GMPNPCs[] = {
  {"Refugee","npc_citizen","Refugee","Humans / Resistance","","models/humans/group02/male_07.mdl",0,-1,-1,0,32,0,false,false,false,{{"SquadName","resistance"},{"citizentype","2"}},{"weapon_pistol","weapon_smg1"}},
  {"VortigauntUriah","npc_vortigaunt","Uriah","Humans / Resistance","models/vortigaunt_doctor.mdl","models/vortigaunt_doctor.mdl",0,-1,-1,0,32,0,false,false,false,{{"SquadName","resistance"}},{}},
  {"npc_magnusson","npc_magnusson","Magnusson","Humans / Resistance","","models/magnusson.mdl",0,-1,-1,0,32,0,false,false,false,{},{""}},
- {"npc_fisherman","npc_fisherman","Fisherman","Humans / Resistance","","models/lostcoast/fisherman/fisherman.mdl",0,-1,-1,0,32,0,false,false,false,{},{"weapon_oldmanharpoon"}},
  {"npc_turret_floor_resistance","npc_turret_floor","Turret Floor Resistance","Humans / Resistance","","models/combine_turrets/citizen_turret.mdl",0,512,-1,0,2,180,true,false,false,{{"SquadName","resistance"}},{}},
  {"npc_rollermine_hacked","npc_rollermine","Rollermine Hacked","Humans / Resistance","","models/roller.mdl",262144,-1,-1,0,20,0,false,false,true,{{"SquadName","resistance"}},{}},
  {"npc_manhack_hacked","npc_manhack","Manhack Hacked","Humans / Resistance","","models/manhack.mdl",2097152,-1,-1,0,32,0,false,false,true,{{"SquadName","resistance"}},{}},

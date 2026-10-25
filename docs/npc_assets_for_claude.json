@@ -1,6 +1,6 @@
 {
-  "npc_variants": 61,
-  "native_classes": 45,
+  "npc_variants": 60,
+  "native_classes": 44,
   "content_only": true,
   "required_groups": [
     "models with .vvd/.vtx/.phy and referenced animation MDLs",
@@ -164,15 +164,6 @@
       "model_override": null,
       "weapons": [
         ""
-      ]
-    },
-    {
-      "id": "npc_fisherman",
-      "entity_class": "npc_fisherman",
-      "preview_model": "models/lostcoast/fisherman/fisherman.mdl",
-      "model_override": null,
-      "weapons": [
-        "weapon_oldmanharpoon"
       ]
     },
     {
