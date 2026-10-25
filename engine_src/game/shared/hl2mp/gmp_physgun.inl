@@ -12,6 +12,7 @@
 #include "filesystem.h"
 #include "ammodef.h"
 #ifndef CLIENT_DLL
+#include "gmp_undo.inl"
 #include "gmp_npc_server.inl"
 #endif
 
@@ -286,6 +287,7 @@ CON_COMMAND( gmp_spawn, "GModPort: gmp_spawn <models/...mdl> [skin] - spawn a pr
 	pProp->Activate();
 	Vector origin = tr.endpos - tr.plane.normal * pProp->CollisionProp()->OBBMins().z;
 	pProp->Teleport( &origin, NULL, NULL );
+	GMP_AddUndo( pPlayer, pProp, "Prop" );
 	Msg( "gmp_spawn: %s at %.0f %.0f %.0f\n", pModel, origin.x, origin.y, origin.z );
 }
 
@@ -322,6 +324,7 @@ CON_COMMAND( gmp_ent, "GModPort: gmp_ent <item_...> - spawn an HL2 item where yo
 		Vector origin = tr.endpos - tr.plane.normal * pEnt->CollisionProp()->OBBMins().z;
 		pEnt->Teleport( &origin, NULL, NULL );
 	}
+	GMP_AddUndo( pPlayer, pEnt, args[1] );
 	Msg( "gmp_ent: %s\n", args[1] );
 }
 
@@ -1185,21 +1188,24 @@ public:
 	{
 		vgui::surface()->DrawSetColor( 50, 50, 50, 240 );
 		vgui::surface()->DrawFilledRect( m_nX0, m_nY0 + m_nTabTall, m_nX1, m_nY1 );
-		for ( int i = 0; i <= ARRAYSIZE( s_Tabs ); i++ )
+		for ( int i = 0; i <= ARRAYSIZE( s_Tabs ) + 1; i++ )
 		{
 			int x0, x1;
 			TabRect( i, x0, x1 );
 			const bool close = i == ARRAYSIZE( s_Tabs );
-			const bool active = i == m_nTab;
+			const bool cleanup = i == ARRAYSIZE( s_Tabs ) + 1;
+			const bool active = i == m_nTab || cleanup;
 			if ( close )
 				vgui::surface()->DrawSetColor( 200, 70, 60, 240 );
+			else if ( cleanup )
+				vgui::surface()->DrawSetColor( 60, 110, 170, 240 );
 			else if ( active )
 				vgui::surface()->DrawSetColor( 50, 50, 50, 240 );
 			else
 				vgui::surface()->DrawSetColor( 95, 95, 95, 230 );
 			vgui::surface()->DrawFilledRect( x0, m_nY0 + ( active || close ? 0 : m_nTabTall / 8 ), x1, m_nY0 + m_nTabTall );
 			wchar_t wide[32];
-			g_pVGuiLocalize->ConvertANSIToUnicode( close ? "X" : s_Tabs[i], wide, sizeof( wide ) );
+			g_pVGuiLocalize->ConvertANSIToUnicode( close ? "X" : cleanup ? "Cleanup" : s_Tabs[i], wide, sizeof( wide ) );
 			int tw, th;
 			vgui::surface()->GetTextSize( m_hTabFont, wide, tw, th );
 			vgui::surface()->DrawSetTextFont( m_hTabFont );
@@ -1221,13 +1227,15 @@ public:
 		}
 		if ( y >= m_nY0 + m_nTabTall )
 			return;
-		for ( int i = 0; i <= ARRAYSIZE( s_Tabs ); i++ )
+		for ( int i = 0; i <= ARRAYSIZE( s_Tabs ) + 1; i++ )
 		{
 			int x0, x1;
 			TabRect( i, x0, x1 );
 			if ( x < x0 || x >= x1 )
 				continue;
-			if ( i == ARRAYSIZE( s_Tabs ) )
+			if ( i == ARRAYSIZE( s_Tabs ) + 1 )
+				engine->ClientCmd_Unrestricted( "gmod_cleanup" );	// GMod's Cleanup: everything you spawned
+			else if ( i == ARRAYSIZE( s_Tabs ) )
 				SetVisible( false );
 			else
 				SelectTab( i );
@@ -1264,6 +1272,12 @@ private:
 		{
 			x1 = m_nX1;
 			x0 = m_nX1 - m_nTabTall * 3 / 2;
+			return;
+		}
+		if ( i == ARRAYSIZE( s_Tabs ) + 1 )	// cleanup, left of the close button
+		{
+			x1 = m_nX1 - m_nTabTall * 3 / 2 - gap;
+			x0 = x1 - wide;
 			return;
 		}
 		x0 = m_nX0 + i * ( wide + gap );

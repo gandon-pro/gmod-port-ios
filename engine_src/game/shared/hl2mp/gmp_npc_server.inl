@@ -89,6 +89,7 @@ CON_COMMAND(gmp_npc, "GModPort: gmp_npc <spawnmenu id> [weapon|none]")
     if (anim && def->skin>=0) anim->m_nSkin=def->skin;
     if (!def->onFloor && !def->onCeiling && !def->noDrop) UTIL_DropToFloor(entity,MASK_NPCSOLID);
     if (def->health>0) { entity->SetHealth(def->health); entity->SetMaxHealth(def->health); }
+    GMP_AddUndo(player,entity,def->id);
     Msg("gmp_npc: spawned %s (%s)\n",def->id,def->entityClass);
 }
 

@@ -264,6 +264,75 @@ change('game/server/client.cpp', 'static ConCommand noclip("noclip", CC_Player_N
        'static ConCommand noclip("noclip", CC_Player_NoClip, "Toggle. Player becomes non-solid and flies.", 0);	// GModPort: sandbox noclip')
 change('game/server/client.cpp', 'void CC_Player_NoClip( void )\n{\n\tif ( !sv_cheats->GetBool() )\n\t\treturn;\n',
        'void CC_Player_NoClip( void )\n{\n\t// GModPort: no sv_cheats check, sandbox noclip\n')
+# Model panels (spawn icons, player model preview) free their old model at once, while with
+# mat_queue_mode the render thread still draws it from the previous frame: use after free in
+# CStudioRender::DrawModel. Keep the reference until a marker queued behind those draws has run.
+change('tier3/mdlutils.cpp', '''void CMDL::UnreferenceMDL()
+{
+	if ( !g_pMDLCache )
+		return;
+
+	if ( m_MDLHandle != MDLHANDLE_INVALID )
+	{''', '''// GModPort: deferred model release for the queued render thread.
+struct GMPDeferredMDL_t
+{
+	MDLHandle_t m_hMDL;
+	CInterlockedInt m_nDone;
+};
+static CUtlVector<GMPDeferredMDL_t *> s_GMPDeferredMDLs;
+
+static void GMP_MarkMDLRendered( GMPDeferredMDL_t *pEntry )
+{
+	pEntry->m_nDone = 1;
+}
+
+static void GMP_FlushDeferredMDLs()
+{
+	for ( int i = s_GMPDeferredMDLs.Count() - 1; i >= 0; i-- )
+	{
+		GMPDeferredMDL_t *pEntry = s_GMPDeferredMDLs[i];
+		if ( !pEntry->m_nDone )
+			continue;
+		g_pMDLCache->UnlockStudioHdr( pEntry->m_hMDL );
+		g_pMDLCache->Release( pEntry->m_hMDL );
+		delete pEntry;
+		s_GMPDeferredMDLs.FastRemove( i );
+	}
+}
+
+void CMDL::UnreferenceMDL()
+{
+	if ( !g_pMDLCache )
+		return;
+
+	GMP_FlushDeferredMDLs();
+	if ( m_MDLHandle != MDLHANDLE_INVALID && g_pMaterialSystem )
+	{
+		CMatRenderContextPtr pRenderContext( g_pMaterialSystem );
+		if ( ICallQueue *pCallQueue = pRenderContext->GetCallQueue() )
+		{
+			GMPDeferredMDL_t *pEntry = new GMPDeferredMDL_t;
+			pEntry->m_hMDL = m_MDLHandle;
+			pEntry->m_nDone = 0;
+			s_GMPDeferredMDLs.AddToTail( pEntry );
+			pCallQueue->QueueCall( GMP_MarkMDLRendered, pEntry );
+			m_MDLHandle = MDLHANDLE_INVALID;
+			return;
+		}
+	}
+
+	if ( m_MDLHandle != MDLHANDLE_INVALID )
+	{''')
+change('tier3/mdlutils.cpp', '''void CMDL::Draw( const matrix3x4_t& rootToWorld, const matrix3x4_t *pBoneToWorld )
+{
+	if ( !g_pMaterialSystem || !g_pMDLCache || !g_pStudioRender )
+		return;
+''', '''void CMDL::Draw( const matrix3x4_t& rootToWorld, const matrix3x4_t *pBoneToWorld )
+{
+	if ( !g_pMaterialSystem || !g_pMDLCache || !g_pStudioRender )
+		return;
+	GMP_FlushDeferredMDLs();	// GModPort
+''')
 change('game/server/game.cpp', '#else\nConVar	flashlight( "mp_flashlight","0", FCVAR_NOTIFY );',
        '#else\nConVar	flashlight( "mp_flashlight","1", FCVAR_NOTIFY );	// GModPort: GMod has the flashlight on')
 # Saved touch profiles (touch.cfg) predate the noclip / flashlight buttons: add them when missing.
@@ -273,6 +342,7 @@ change('game/client/touch.cpp', '\telse\n\t\tResetToDefaults();\n\n\tCTouchTextu
        '\tstatic const struct { const char *name, *texture, *command; float x1, y1, x2, y2; } s_NewButtons[] = {\n'
        '\t\t{ "noclip", "vgui/touch/gmp_noclip", "noclip", 0.29f, 0.02f, 0.37f, 0.13f },\n'
        '\t\t{ "flashlight", "vgui/touch/gmp_light", "impulse 100", 0.49f, 0.02f, 0.57f, 0.13f },\n'
+       '\t\t{ "undo", "vgui/touch/gmp_undo", "gmod_undo", 0.29f, 0.16f, 0.37f, 0.27f },\n'
        '\t};\n'
        '\tfor ( int n = 0; n < ARRAYSIZE( s_NewButtons ); n++ )\n'
        '\t{\n'
