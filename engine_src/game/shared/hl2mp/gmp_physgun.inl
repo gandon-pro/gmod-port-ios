@@ -366,7 +366,7 @@ CON_COMMAND( gmp_ent, "GModPort: gmp_ent <item_...> - spawn an HL2 item where yo
 CON_COMMAND( gmp_give, "GModPort: gmp_give <weapon_...> - give a weapon from the spawn menu" )
 {
 	CBasePlayer *pPlayer = UTIL_GetCommandClient();
-	if ( !pPlayer || !pPlayer->IsAlive() || args.ArgC() < 2 || Q_strnicmp( args[1], "weapon_", 7 ) )
+	if ( !pPlayer || !pPlayer->IsAlive() || args.ArgC() < 2 || ( Q_strnicmp( args[1], "weapon_", 7 ) && Q_stricmp( args[1], "gmod_tool" ) ) )
 		return;
 	pPlayer->GiveNamedItem( args[1] );
 	CBaseCombatWeapon *pWeapon = pPlayer->Weapon_OwnsThisType( args[1] );
@@ -666,6 +666,7 @@ static const struct { const char *cls, *name, *model; } s_GMPEntityTable[] =
 static const struct { const char *cls, *name, *model; } s_GMPWeaponTable[] =
 {
 	{ "weapon_physgun", "Physics Gun", "models/weapons/w_physics.mdl" },
+	{ "gmod_tool", "Tool Gun", "models/weapons/w_toolgun.mdl" },
 	{ "weapon_physcannon", "Gravity Gun", "models/weapons/w_physics.mdl" },
 	{ "weapon_crowbar", "Crowbar", "models/weapons/w_crowbar.mdl" },
 	{ "weapon_stunstick", "Stunstick", "models/weapons/w_stunbaton.mdl" },
@@ -1386,4 +1387,5 @@ static ConCommand gmp_menu_down( "+menu", GMP_SpawnMenuDown, "GModPort: toggle t
 static ConCommand gmp_menu_up( "-menu", GMP_SpawnMenuUp );
 #endif // CLIENT_DLL
 
+#include "gmp_toolgun.inl"
 #include "gmp_context_menu.inl"

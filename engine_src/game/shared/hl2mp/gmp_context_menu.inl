@@ -236,10 +236,26 @@ static const GMPMenuToggle s_GMPPhysgunMenu[] = {
 	{ "Lavender", "cl_weaponcolor", "0.50 0.60 3.10" }, { "Purple", "cl_weaponcolor", "1.40 0.60 2.50" },
 	{ "Pink", "cl_weaponcolor", "1.90 0.60 1.10" },
 };
+// Tool gun (gmp_toolgun.inl): the mode and the colour tool's colour.
+static const GMPMenuToggle s_GMPToolsMenu[] = {
+	{ "Remover", "gmod_toolmode", "remover" }, { "Weld", "gmod_toolmode", "weld" },
+	{ "No Collide", "gmod_toolmode", "nocollide" }, { "Rope", "gmod_toolmode", "rope" },
+	{ "Colour", "gmod_toolmode", "color" },
+};
+static const GMPMenuToggle s_GMPToolColorMenu[] = {
+	{ "White", "gmod_toolcolor", "255 255 255" }, { "Red", "gmod_toolcolor", "255 40 40" },
+	{ "Orange", "gmod_toolcolor", "255 140 0" }, { "Yellow", "gmod_toolcolor", "255 230 40" },
+	{ "Green", "gmod_toolcolor", "40 220 60" }, { "Blue", "gmod_toolcolor", "40 90 255" },
+	{ "Purple", "gmod_toolcolor", "160 60 255" }, { "Black", "gmod_toolcolor", "30 30 30" },
+};
 static bool GMP_MenuItemChecked( const GMPMenuToggle &item, ConVarRef &var )
 {
 	if ( !item.value )
 		return var.GetBool();
+	if ( !Q_stricmp( var.GetString(), item.value ) )
+		return true;
+	if ( Q_stricmp( item.cvar, "cl_weaponcolor" ) )
+		return false;
 	Vector have, want;
 	return GMP_ParseWeaponColor( var.GetString(), have ) && GMP_ParseWeaponColor( item.value, want ) && have.DistToSqr( want ) < 0.01f;
 }
@@ -249,6 +265,8 @@ static const GMPMenu s_GMPMenus[] = {
 	{ "NPCs", s_GMPNPCMenu, ARRAYSIZE( s_GMPNPCMenu ) },
 	{ "Server", s_GMPServerMenu, ARRAYSIZE( s_GMPServerMenu ) },
 	{ "Physgun", s_GMPPhysgunMenu, ARRAYSIZE( s_GMPPhysgunMenu ) },
+	{ "Tools", s_GMPToolsMenu, ARRAYSIZE( s_GMPToolsMenu ) },
+	{ "Tool Colour", s_GMPToolColorMenu, ARRAYSIZE( s_GMPToolColorMenu ) },
 };
 
 static void GMP_DrawTextIn( vgui::HFont font, const char *text, int x0, int y0, int x1, int y1, Color color, bool center = true )

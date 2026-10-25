@@ -1,0 +1,20 @@
+// GModPort: weapon script for gmod_tool (game/shared/hl2mp/gmp_toolgun.inl).
+WeaponData
+{
+	"printname"		"Tool Gun"
+	"viewmodel"		"models/weapons/v_toolgun.mdl"
+	"playermodel"	"models/weapons/w_toolgun.mdl"
+	"anim_prefix"	"pistol"
+	"bucket"		"5"
+	"bucket_position"	"0"
+	"clip_size"		"-1"
+	"clip2_size"	"-1"
+	"default_clip"	"-1"
+	"default_clip2"	"-1"
+	"primary_ammo"	"None"
+	"secondary_ammo"	"None"
+	"weight"		"0"
+	"autoswitchto"	"0"
+	"autoswitchfrom"	"0"
+	"item_flags"	"0"
+}

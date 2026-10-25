@@ -267,7 +267,9 @@ int main(int, char**) {
             @[resource(@"gameinfo.txt"), [game stringByAppendingPathComponent:@"gameinfo.txt"]],
             @[resource(@"touch_default.cfg"), [cfg stringByAppendingPathComponent:@"touch_default.cfg"]],
             @[resource(@"gmp_bindings.cfg"), [cfg stringByAppendingPathComponent:@"gmp_bindings.cfg"]],
+            @[resource(@"gmp_gamepad.cfg"), [cfg stringByAppendingPathComponent:@"gmp_gamepad.cfg"]],
             @[resource(@"weapon_physgun.txt"), [scripts stringByAppendingPathComponent:@"weapon_physgun.txt"]],
+            @[resource(@"gmod_tool.txt"), [scripts stringByAppendingPathComponent:@"gmod_tool.txt"]],
             // GMod-style main menu (GameUI): entries and the logo panel (materials/gmp/logo in the port pack).
             @[resource(@"GameMenu.res"), [ui stringByAppendingPathComponent:@"GameMenu.res"]],
             @[resource(@"GameLogo.res"), [ui stringByAppendingPathComponent:@"GameLogo.res"]]]];
@@ -275,7 +277,7 @@ int main(int, char**) {
         for (NSString* name in [fm contentsOfDirectoryAtPath:touchSource error:nil])
             if ([name.pathExtension isEqualToString:@"vtf"])
                 [copies addObject:@[[touchSource stringByAppendingPathComponent:name], [touchDir stringByAppendingPathComponent:name]]];
-        if (copies.count == 5) SDL_Log("No touch textures in bundle at %s", touchSource.UTF8String);
+        if (copies.count == 8) SDL_Log("No touch textures in bundle at %s", touchSource.UTF8String);
         for (NSArray<NSString*>* copy in copies) {
             [fm removeItemAtPath:copy[1] error:nil];
             if (![fm copyItemAtPath:copy[0] toPath:copy[1] error:nil])
@@ -334,6 +336,9 @@ int main(int, char**) {
         // Touches reach the game (touch.cpp) and vgui as finger events. SDL's default touch->mouse
         // emulation would add every finger as mouse look and a MOUSE1 click (Android disables it too).
         SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+        // Game controllers come from GCController (MFi: DualSense, Xbox, Switch Pro); the CoreMotion
+        // accelerometer would otherwise be listed as joystick 0.
+        SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
         std::vector<std::string> args={"GModPort","-basedir",documents.UTF8String,"-game","garrysmod","-novid","-insecure","-console","-condebug","-dev","2","-w",width,"-h","1080",
                                        "+touch_enable","1","+exec","gmp_bindings.cfg"};  // preserve the layout loaded by touch.cpp
         std::vector<char*> argv;

@@ -244,7 +244,7 @@ change('game/shared/hl2mp/weapon_physcannon.cpp',
        '// GModPort: weapon_physgun and the test spawn menu reuse CGrabController.\n#include "gmp_physgun.inl"\n')
 path='game/server/hl2mp/hl2mp_player.cpp'
 change(path, '\tGiveNamedItem( "weapon_physcannon" );\n\n\tconst char *szDefaultWeaponName',
-       '\tGiveNamedItem( "weapon_physcannon" );\n\tGiveNamedItem( "weapon_physgun" );\n\n\tconst char *szDefaultWeaponName')
+       '\tGiveNamedItem( "weapon_physcannon" );\n\tGiveNamedItem( "weapon_physgun" );\n\tGiveNamedItem( "gmod_tool" );\n\n\tconst char *szDefaultWeaponName')
 change(path, '\t\tWeapon_Switch( Weapon_OwnsThisType( "weapon_physcannon" ) );\n\t}\n}',
        '\t\tWeapon_Switch( Weapon_OwnsThisType( "weapon_physgun" ) );\n\t}\n}')
 # GMod player models (C menu > Player Model): models/player/*.mdl pass validation, precached on
@@ -577,4 +577,6 @@ from patch_npcs import apply as patch_npcs
 changes.extend(patch_npcs(root))
 from patch_npc_weapons import apply as patch_npc_weapons
 changes.extend(patch_npc_weapons(root))
+from patch_gamepad import apply as patch_gamepad
+changes.extend(patch_gamepad(root))
 print(json.dumps({'engine_commit':pin,'platform_files_patched':changes,'game_code_modified':True},indent=2))
