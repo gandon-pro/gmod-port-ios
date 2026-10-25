@@ -79,11 +79,19 @@ def apply(root):
     # game to single-player episodic mode. Shared class layouts use the same flag.
     for path in ['game/server/hl2/npc_antlion.cpp','game/server/hl2/npc_antlion.h',
                  'game/server/hl2/npc_antlionguard.cpp','game/client/hl2/c_npc_antlionguard.cpp',
+                 'game/server/hl2/npc_turret_floor.cpp','game/server/hl2/npc_turret_floor.h',
                  'game/server/hl2/npc_strider.cpp','game/server/hl2/npc_strider.h']:
         text=(root/path).read_text(encoding='utf-8')
         text=re.sub(r'^([ \t]*)#(?:ifdef|if)\s+HL2_EPISODIC\b([^\n]*)',
                     r'\1#if defined(HL2_EPISODIC) || defined(GMP_EPISODIC_NPCS)\2',text,flags=re.M)
         write(path,text)
+    path='game/server/hl2/npc_turret_floor.cpp'
+    text=(root/path).read_text(encoding='utf-8')
+    text=text.replace("? pModelName : FLOOR_TURRET_MODEL;",
+                      "? pModelName : ( IsCitizenTurret() ? FLOOR_TURRET_MODEL_CITIZEN : FLOOR_TURRET_MODEL );")
+    text=text.replace("? pModelName : FLOOR_TURRET_MODEL );",
+                      "? pModelName : ( IsCitizenTurret() ? FLOOR_TURRET_MODEL_CITIZEN : FLOOR_TURRET_MODEL ) );")
+    write(path,text)
     replace('game/shared/shareddefs.h',
             '#if defined( HL2_EPISODIC )\n\tBLOOD_COLOR_ANTLION,',
             '#if defined( HL2_EPISODIC ) || defined(GMP_EPISODIC_NPCS)\n\tBLOOD_COLOR_ANTLION,')
