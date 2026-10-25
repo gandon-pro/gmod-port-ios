@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'app/**'
+      - 'engine_src/**'
       - 'platform/**'
       - 'cmake/**'
       - 'resources/**'

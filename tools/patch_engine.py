@@ -444,4 +444,6 @@ change('inputsystem/touch_sdl.cpp',
        '\t\tevent->tfinger.fingerId = slot;\n\t}\n'
        '#endif\n\n'
        '\tswitch ( event->type ) {\n')
-print(json.dumps({'engine_commit':pin,'platform_files_patched':changes,'game_code_modified':False},indent=2))
+from patch_touch_editor import apply as patch_touch_editor
+changes.extend(patch_touch_editor(root))
+print(json.dumps({'engine_commit':pin,'platform_files_patched':changes,'game_code_modified':True},indent=2))

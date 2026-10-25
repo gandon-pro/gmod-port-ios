@@ -266,6 +266,7 @@ int main(int, char**) {
         NSMutableArray<NSArray<NSString*>*>* copies = [NSMutableArray arrayWithArray:@[
             @[resource(@"gameinfo.txt"), [game stringByAppendingPathComponent:@"gameinfo.txt"]],
             @[resource(@"touch_default.cfg"), [cfg stringByAppendingPathComponent:@"touch_default.cfg"]],
+            @[resource(@"gmp_bindings.cfg"), [cfg stringByAppendingPathComponent:@"gmp_bindings.cfg"]],
             @[resource(@"weapon_physgun.txt"), [scripts stringByAppendingPathComponent:@"weapon_physgun.txt"]],
             // GMod-style main menu (GameUI): entries and the logo panel (materials/gmp/logo in the port pack).
             @[resource(@"GameMenu.res"), [ui stringByAppendingPathComponent:@"GameMenu.res"]],
@@ -334,7 +335,7 @@ int main(int, char**) {
         // emulation would add every finger as mouse look and a MOUSE1 click (Android disables it too).
         SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
         std::vector<std::string> args={"GModPort","-basedir",documents.UTF8String,"-game","garrysmod","-novid","-insecure","-console","-condebug","-dev","2","-w",width,"-h","1080",
-                                       "+touch_enable","1","+exec","touch_default.cfg"};  // starts at the main menu
+                                       "+touch_enable","1","+exec","gmp_bindings.cfg"};  // preserve the layout loaded by touch.cpp
         std::vector<char*> argv;
         for (auto& arg:args) argv.push_back(&arg[0]);
         // Source resolves -game and gameinfo search paths relative to the working directory.

@@ -18,6 +18,7 @@ BUTTONS = {
     'gmp_jump': 'JUMP', 'gmp_duck': 'DUCK', 'gmp_fire': 'FIRE', 'gmp_fire2': 'ALT', 'gmp_run': 'RUN', 'gmp_use': 'USE',
     'gmp_spawnmenu': 'Q', 'gmp_contextmenu': 'C', 'gmp_menu': 'MENU',
     'gmp_prev': '<', 'gmp_next': '>',
+    'gmp_settings': '@gear', 'gmp_done': 'OK',
 }
 FONT = {  # 5x7 glyphs, one string per row
     '<': ['00010', '00100', '01000', '10000', '01000', '00100', '00010'],
@@ -33,6 +34,7 @@ FONT = {  # 5x7 glyphs, one string per row
     'L': ['10000', '10000', '10000', '10000', '10000', '10000', '11111'],
     'M': ['10001', '11011', '10101', '10101', '10001', '10001', '10001'],
     'N': ['10001', '11001', '10101', '10011', '10001', '10001', '10001'],
+    'O': ['01110', '10001', '10001', '10001', '10001', '10001', '01110'],
     'P': ['11110', '10001', '10001', '11110', '10000', '10000', '10000'],
     'Q': ['01110', '10001', '10001', '10001', '10101', '10010', '01101'],
     'R': ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
@@ -57,6 +59,16 @@ def render(label):
                 px[i:i + 4] = bytes((20, 20, 20, 120))
             if 27.5 <= d <= 30.5:
                 px[i:i + 4] = bytes((255, 255, 255, 230))
+    if label == '@gear':
+        for y in range(SIZE):
+            for x in range(SIZE):
+                dx, dy = x - c, y - c
+                d = math.hypot(dx, dy)
+                angle = (math.atan2(dy, dx) + math.pi / 8) % (math.pi / 4) - math.pi / 8
+                if 8 <= d <= (22 if abs(angle) < .19 else 17):
+                    i = (y * SIZE + x) * 4
+                    px[i:i + 4] = bytes((255,255,255,255))
+        return bytes(px)
     scale = 3 if len(label) <= 2 else 2
     width = (len(label) * 6 - 1) * scale
     x0, y0 = (SIZE - width) // 2, (SIZE - 7 * scale) // 2
