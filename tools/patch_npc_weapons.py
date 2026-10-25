@@ -74,8 +74,9 @@ def apply(root):
         native = re.search(r'acttable_t\s+' + cls + r'::m_acttable\[\]\s*=\s*\{[\s\S]*?\n\};', original)
         if not table or not native: raise RuntimeError('Missing activity table: ' + weapon)
         row = r'\{\s*(ACT_\w+)\s*,\s*(ACT_\w+)\s*,\s*(true|false)\s*\}'
-        mp_rows = re.findall(row, table.group())
-        npc_rows = re.findall(row, native.group())
+        uncomment = lambda value: re.sub(r'//[^\n]*|/\*[\s\S]*?\*/', '', value)
+        mp_rows = re.findall(row, uncomment(table.group()))
+        npc_rows = re.findall(row, uncomment(native.group()))
         merged = {r[0]: r for r in mp_rows}
         merged.update({r[0]: r for r in npc_rows})
         new = f'acttable_t {cls}::m_acttable[] =\n{{\n'
