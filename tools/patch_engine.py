@@ -343,6 +343,7 @@ change('game/client/touch.cpp', '\telse\n\t\tResetToDefaults();\n\n\tCTouchTextu
        '\t\t{ "noclip", "vgui/touch/gmp_noclip", "noclip", 0.29f, 0.02f, 0.37f, 0.13f },\n'
        '\t\t{ "flashlight", "vgui/touch/gmp_light", "impulse 100", 0.49f, 0.02f, 0.57f, 0.13f },\n'
        '\t\t{ "undo", "vgui/touch/gmp_undo", "gmod_undo", 0.29f, 0.16f, 0.37f, 0.27f },\n'
+       '\t\t{ "reload", "vgui/touch/gmp_reload", "+reload", 0.72f, 0.24f, 0.82f, 0.40f },\n'
        '\t};\n'
        '\tfor ( int n = 0; n < ARRAYSIZE( s_NewButtons ); n++ )\n'
        '\t{\n'
@@ -506,6 +507,16 @@ change('game/shared/weapon_parse.cpp',
        '\t}\n'
        '\n'
        '\tif ( !pKV )\n\t\treturn false;\n\n\tpFileInfo->Parse( pKV, szWeaponName );')
+# The HUD icons (TextureData) are read from the weapon script a second time: same fallback.
+change('game/client/weapons_resource.cpp',
+       '\tLoadHudTextures( tempList, sz, g_pGameRules->GetEncryptionKey() );\n',
+       '\tLoadHudTextures( tempList, sz, g_pGameRules->GetEncryptionKey() );\n'
+       '\tif ( !tempList.Count() )\n'
+       '\t{\n'
+       '\t\t// GModPort: GMod\'s weapon scripts are in scripts/weapons/ (plain .txt).\n'
+       '\t\tQ_snprintf( sz, sizeof( sz ), "scripts/weapons/%s", pWeaponInfo->szClassName );\n'
+       '\t\tLoadHudTextures( tempList, sz, NULL );\n'
+       '\t}\n')
 # GMod has no suit power: sprint, flashlight and air never run out.
 before='\t// Suitpower cheat on?\n\tif ( sv_infinite_aux_power.GetBool() )\n\t\treturn true;\n'
 change('game/server/hl2/hl2_player.cpp', before,

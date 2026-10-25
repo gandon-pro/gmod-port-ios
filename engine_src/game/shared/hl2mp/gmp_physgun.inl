@@ -20,6 +20,22 @@
 #define CWeaponGMPPhysGun C_WeaponGMPPhysGun
 #endif
 
+// GMod's cl_weaponcolor: an RGB tint (components up to ~4) for the physgun's glow and beam.
+#define GMP_WEAPONCOLOR_DEFAULT	0.30f, 1.80f, 2.10f
+
+#ifdef CLIENT_DLL
+static ConVar cl_weaponcolor( "cl_weaponcolor", "0.30 1.80 2.10", FCVAR_USERINFO | FCVAR_ARCHIVE, "GModPort: physgun colour (r g b)" );
+#endif
+
+static bool GMP_ParseWeaponColor( const char *pValue, Vector &color )
+{
+	float r, g, b;
+	if ( !pValue || sscanf( pValue, "%f %f %f", &r, &g, &b ) != 3 )
+		return false;
+	color.Init( clamp( r, 0.0f, 4.0f ), clamp( g, 0.0f, 4.0f ), clamp( b, 0.0f, 4.0f ) );
+	return true;
+}
+
 class CWeaponGMPPhysGun : public CBaseHL2MPCombatWeapon
 {
 public:
@@ -30,6 +46,7 @@ public:
 	CWeaponGMPPhysGun( void )
 	{
 		m_bBeam = false;
+		m_vecColor.Init( GMP_WEAPONCOLOR_DEFAULT );
 #ifdef CLIENT_DLL
 		m_pBeam = NULL;
 #endif
@@ -51,10 +68,20 @@ public:
 #ifdef CLIENT_DLL
 	~CWeaponGMPPhysGun( void );
 	void	OnDataChanged( DataUpdateType_t updateType );
+	// The local player's own gun follows cl_weaponcolor at once, without waiting for the server.
+	Vector	GetWeaponColor( void )
+	{
+		Vector color;
+		C_BasePlayer *pOwner = ToBasePlayer( GetOwner() );
+		if ( pOwner && pOwner->IsLocalPlayer() && GMP_ParseWeaponColor( cl_weaponcolor.GetString(), color ) )
+			return color;
+		return m_vecColor;
+	}
 #endif
 
 	CNetworkVar( bool, m_bBeam );		// carrying: draw the beam to m_vecBeamEnd
 	CNetworkVector( m_vecBeamEnd );		// world position of the grabbed point
+	CNetworkVector( m_vecColor );		// the owner's cl_weaponcolor (GMod's weapon colour)
 
 private:
 #ifdef CLIENT_DLL
@@ -82,9 +109,11 @@ BEGIN_NETWORK_TABLE( CWeaponGMPPhysGun, DT_WeaponGMPPhysGun )
 #ifdef CLIENT_DLL
 	RecvPropBool( RECVINFO( m_bBeam ) ),
 	RecvPropVector( RECVINFO( m_vecBeamEnd ) ),
+	RecvPropVector( RECVINFO( m_vecColor ) ),
 #else
 	SendPropBool( SENDINFO( m_bBeam ) ),
 	SendPropVector( SENDINFO( m_vecBeamEnd ), -1, SPROP_COORD ),
+	SendPropVector( SENDINFO( m_vecColor ), 8, 0, 0.0f, 4.0f ),
 #endif
 END_NETWORK_TABLE()
 
@@ -135,6 +164,10 @@ void CWeaponGMPPhysGun::ItemPostFrame( void )
 		return;
 
 #ifndef CLIENT_DLL
+	Vector color;
+	if ( GMP_ParseWeaponColor( engine->GetClientConVarValue( pOwner->entindex(), "cl_weaponcolor" ), color ) && color != m_vecColor.Get() )
+		m_vecColor = color;
+
 	if ( !( pOwner->m_nButtons & IN_ATTACK ) )
 	{
 		m_bWaitForRelease = false;
@@ -373,6 +406,8 @@ CON_COMMAND( gmp_ammo, "GModPort: gmp_ammo <Pistol|SMG1|...|all> - fill an ammo 
 #include "ienginevgui.h"
 #include "iinput.h"
 #include "beamdraw.h"
+#include "functionproxy.h"
+#include "baseviewmodel_shared.h"
 
 #ifdef CreateFont
 #undef CreateFont
@@ -494,7 +529,10 @@ public:
 
 		CMatRenderContextPtr pRenderContext( materials );
 		pRenderContext->Bind( materials->FindMaterial( GMP_PHYSBEAM_MATERIAL, TEXTURE_GROUP_CLIENT_EFFECTS ) );
-		const Vector color( 0.3f, 0.85f, 1.0f );	// GMod's default weapon colour
+		// The weapon colour, scaled so its brightest component is 1 (the gun's tint goes up to ~4).
+		Vector color = m_pWeapon->GetWeaponColor();
+		const float brightest = MAX( color.x, MAX( color.y, color.z ) );
+		color = brightest > 0.01f ? color / brightest : Vector( 1, 1, 1 );
 		DrawBeamQuadratic( start, control, m_vecDrawEnd, 6.0f, color, gpGlobals->curtime * 2.0f );
 		return 1;
 	}
@@ -519,6 +557,28 @@ void C_WeaponGMPPhysGun::OnDataChanged( DataUpdateType_t updateType )
 	if ( m_pBeam )
 		m_pBeam->Update();
 }
+
+// GMod's PlayerWeaponColor material proxy (the physgun's vmts: resultVar $selfillumtint). Engines
+// without it leave the glow at its vmt value; this feeds it the gun's colour, viewmodel included.
+class CGMPPlayerWeaponColorProxy : public CResultProxy
+{
+public:
+	virtual void OnBind( void *pArg )
+	{
+		Vector color( GMP_WEAPONCOLOR_DEFAULT );
+		C_BaseEntity *pEntity = BindArgToEntity( pArg );
+		C_BaseViewModel *pViewModel = dynamic_cast<C_BaseViewModel *>( pEntity );
+		if ( pViewModel )
+			pEntity = pViewModel->GetOwningWeapon();
+		C_WeaponGMPPhysGun *pGun = dynamic_cast<C_WeaponGMPPhysGun *>( pEntity );
+		if ( pGun )
+			color = pGun->GetWeaponColor();
+		else if ( !GMP_ParseWeaponColor( cl_weaponcolor.GetString(), color ) )	// spawn icons, previews
+			color.Init( GMP_WEAPONCOLOR_DEFAULT );
+		m_pResult->SetVecValue( color.x, color.y, color.z );
+	}
+};
+EXPOSE_INTERFACE( CGMPPlayerWeaponColorProxy, IMaterialProxy, "PlayerWeaponColor" IMATERIAL_PROXY_INTERFACE_VERSION );
 
 // gmp_weapnext / gmp_weapprev: the touch weapon buttons. Switches straight to the next or previous
 // weapon in slot order, without the HUD selection that invnext/invprev open and +attack confirms.

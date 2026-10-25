@@ -180,6 +180,20 @@ def apply(root):
         marker = '// GModPort: match the linked HL2MP weapon layout.\n'
         if not text.startswith(marker):
             write(path, marker + '#ifdef HL2MP\n#include "../../shared/hl2mp/' + target + '"\n#else\n' + text + '\n#endif\n')
+
+    # HL2MP's SetActivity puts the server weapon back on its viewmodel after picking a world-model
+    # sequence. For an NPC that leaves the w_ sequence playing on the v_ model, so the world model's
+    # fire events (EVENT_WEAPON_AR2 etc.) never reach Operator_HandleAnimEvent: no NPC bullets.
+    path = 'game/shared/basecombatweapon_shared.cpp'
+    text = read(path)
+    old = ('#if !defined( CLIENT_DLL ) && (defined( HL2MP ) || defined( PORTAL ))\n'
+           '\tSetModel( GetViewModel() );\n#endif\n')
+    new = ('#if !defined( CLIENT_DLL ) && (defined( HL2MP ) || defined( PORTAL ))\n'
+           '\tif ( !GetOwner() || GetOwner()->IsPlayer() )\t// GModPort: NPCs keep the world model\n'
+           '\t\tSetModel( GetViewModel() );\n#endif\n')
+    if new not in text:
+        if text.count(old) != 1: raise RuntimeError('Missing HL2MP SetActivity model swap')
+        write(path, text.replace(old, new))
     return changed
 
 

@@ -19,7 +19,7 @@ BUTTONS = {
     'gmp_spawnmenu': 'Q', 'gmp_contextmenu': 'C', 'gmp_menu': 'MENU',
     'gmp_prev': '<', 'gmp_next': '>',
     'gmp_settings': '@gear', 'gmp_done': 'OK',
-    'gmp_noclip': 'FLY', 'gmp_light': 'F', 'gmp_undo': 'Z',
+    'gmp_noclip': 'FLY', 'gmp_light': 'F', 'gmp_undo': 'Z', 'gmp_reload': 'R',
 }
 FONT = {  # 5x7 glyphs, one string per row
     '<': ['00010', '00100', '01000', '10000', '01000', '00100', '00010'],

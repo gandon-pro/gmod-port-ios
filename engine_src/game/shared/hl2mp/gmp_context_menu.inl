@@ -215,7 +215,8 @@ static const GMPPlayerModel s_GMPPlayerModels[] =
 
 // Menu bar toggles, GMod's (lua/autorun/menubar.lua) where this engine has the convar; rows whose
 // convar does not exist are left out, cheat convars are greyed out while sv_cheats is 0.
-struct GMPMenuToggle { const char *label, *cvar; };
+// With a value the row is a radio choice: checked while the convar holds it, tapping sets it.
+struct GMPMenuToggle { const char *label, *cvar, *value; };
 static const GMPMenuToggle s_GMPDrawingMenu[] = {
 	{ "Draw HUD", "cl_drawhud" }, { "Shadows", "r_shadows" }, { "Detail Props", "r_drawdetailprops" },
 	{ "Show FPS", "cl_showfps" }, { "Wireframe", "mat_wireframe" },
@@ -227,11 +228,27 @@ static const GMPMenuToggle s_GMPNPCMenu[] = {
 static const GMPMenuToggle s_GMPServerMenu[] = {
 	{ "Allow Cheats", "sv_cheats" }, { "Realistic Fall Damage", "mp_falldamage" }, { "Mega Gravity Gun", "physcannon_mega_enabled" },
 };
+// GMod's weapon colour presets (the physgun vmts list them).
+static const GMPMenuToggle s_GMPPhysgunMenu[] = {
+	{ "Default", "cl_weaponcolor", "0.30 1.80 2.10" }, { "White", "cl_weaponcolor", "1.50 2.20 1.90" },
+	{ "Red", "cl_weaponcolor", "3.50 0.30 0.20" }, { "Yellow", "cl_weaponcolor", "2.80 1.70 0.40" },
+	{ "Green", "cl_weaponcolor", "0.50 2.10 0.80" }, { "Forest Green", "cl_weaponcolor", "1.00 2.40 0.40" },
+	{ "Lavender", "cl_weaponcolor", "0.50 0.60 3.10" }, { "Purple", "cl_weaponcolor", "1.40 0.60 2.50" },
+	{ "Pink", "cl_weaponcolor", "1.90 0.60 1.10" },
+};
+static bool GMP_MenuItemChecked( const GMPMenuToggle &item, ConVarRef &var )
+{
+	if ( !item.value )
+		return var.GetBool();
+	Vector have, want;
+	return GMP_ParseWeaponColor( var.GetString(), have ) && GMP_ParseWeaponColor( item.value, want ) && have.DistToSqr( want ) < 0.01f;
+}
 struct GMPMenu { const char *title; const GMPMenuToggle *items; int count; };
 static const GMPMenu s_GMPMenus[] = {
 	{ "Drawing", s_GMPDrawingMenu, ARRAYSIZE( s_GMPDrawingMenu ) },
 	{ "NPCs", s_GMPNPCMenu, ARRAYSIZE( s_GMPNPCMenu ) },
 	{ "Server", s_GMPServerMenu, ARRAYSIZE( s_GMPServerMenu ) },
+	{ "Physgun", s_GMPPhysgunMenu, ARRAYSIZE( s_GMPPhysgunMenu ) },
 };
 
 static void GMP_DrawTextIn( vgui::HFont font, const char *text, int x0, int y0, int x1, int y1, Color color, bool center = true )
@@ -850,11 +867,19 @@ public:
 			ClosePopups();
 			return;
 		}
-		ConVarRef var( m_MenuRows[row] );
+		const GMPMenuToggle &item = *m_MenuRows[row];
+		ConVarRef var( item.cvar );
+		if ( item.value )
+		{
+			var.SetValue( item.value );
+			for ( int i = 0; i < m_pDropdown->Rows().Count(); i++ )
+				m_pDropdown->Rows()[i].checked = ( i == row );
+			return;
+		}
 		if ( var.IsValid() )
 		{
 			char cmd[96];
-			Q_snprintf( cmd, sizeof( cmd ), "%s %d\n", m_MenuRows[row], var.GetBool() ? 0 : 1 );
+			Q_snprintf( cmd, sizeof( cmd ), "%s %d\n", item.cvar, var.GetBool() ? 0 : 1 );
 			engine->ClientCmd_Unrestricted( cmd );
 		}
 		m_pDropdown->Rows()[row].checked = !m_pDropdown->Rows()[row].checked;	// the command runs next frame
@@ -930,13 +955,13 @@ private:
 			CGMPListPopup::Row row;
 			row.label = item.label;
 			row.check = true;
-			row.checked = var.GetBool();
+			row.checked = GMP_MenuItemChecked( item, var );
 			row.disabled = var.IsFlagSet( FCVAR_CHEAT ) && !( cheats.IsValid() && cheats.GetBool() );
 			if ( row.disabled )
 				row.label += " (cheats)";
 			row.red = false;
 			m_pDropdown->Rows().AddToTail( row );
-			m_MenuRows.AddToTail( item.cvar );
+			m_MenuRows.AddToTail( &item );
 		}
 		int x0, x1;
 		MenuButton( i, x0, x1 );
@@ -1012,7 +1037,8 @@ private:
 	int m_nEnt, m_nOpenMenu, m_nIconTexture;
 	CGMPPlayerEditor *m_pEditor;
 	CGMPListPopup *m_pDropdown, *m_pProperties;
-	CUtlVector<const char *> m_Actions, m_MenuRows;
+	CUtlVector<const char *> m_Actions;
+	CUtlVector<const GMPMenuToggle *> m_MenuRows;
 };
 
 static vgui::DHANDLE<CGMPContextMenu> g_hGMPContextMenu;
