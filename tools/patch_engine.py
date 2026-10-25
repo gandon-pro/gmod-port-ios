@@ -457,4 +457,6 @@ from patch_touch_editor import apply as patch_touch_editor
 changes.extend(patch_touch_editor(root))
 from patch_npcs import apply as patch_npcs
 changes.extend(patch_npcs(root))
+from patch_npc_weapons import apply as patch_npc_weapons
+changes.extend(patch_npc_weapons(root))
 print(json.dumps({'engine_commit':pin,'platform_files_patched':changes,'game_code_modified':True},indent=2))
