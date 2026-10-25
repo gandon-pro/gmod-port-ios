@@ -6,7 +6,8 @@
 ## Текущий статус
 
 - G1: все Source-модули компилируются и линкуются в один arm64-бинарник, CI выпускает
-  `GModPort-unsigned.ipa`. **На телефоне ещё не запускался** — критерий G1 не подтверждён.
+  `GModPort-unsigned.ipa`. Пользователь сообщил о работающей игре на iPhone;
+  новые NPC и редактор управления требуют отдельной проверки на устройстве.
 - Renderer bring-up использует разрешённый заданием native OpenGLES fallback.
   **ANGLE/Metal ещё не подключён**, его наличие не имитируется.
 - G2: статические библиотеки Windows x64 и iPhone arm64 собраны. На Windows и
@@ -35,8 +36,8 @@ wscript; это не ручная копия тысяч записей. Compiler
 Имена внешних API tier0/vstdlib/ToGLES/stub_steam сохраняются; фабрики остаются
 раздельными. Это [штатный способ обработки объектных файлов Apple](https://github.com/apple-oss-distributions/cctools/blob/main/man/nmedit.1).
 Опция подавления duplicate definitions не используется. Host-тест с настоящим
-EXPOSE_INTERFACE_FN и общим helper-архивом проходит; полная линковка движка ещё
-проверяется. tier1/interface.cpp заменён общей реализацией loader и фабриками.
+EXPOSE_INTERFACE_FN и общим helper-архивом проходит; полная линковка базового движка
+проходит в CI. tier1/interface.cpp заменён общей реализацией loader и фабриками.
 
 ## Контент и проверка на телефоне
 
@@ -54,12 +55,14 @@ CI-бандл не содержит gm_construct и ресурсов GMod.
 Скрипт кладёт `garrysmod`, `sourceengine` (только hl2_* VPK из gameinfo) и `platform` в
 `GModPort.app/content/`. Приложение линкует `Documents/gmcontent` на встроенный контент,
 а без него — на сам Documents, поэтому оба варианта используют один gameinfo.txt.
-Конфигурация запуска задаёт `-basedir Documents -game garrysmod +map gm_construct`.
-Для G1 используются stock hl2mp client/server. Это ещё не GMod sandbox.
-Q/C кнопки отправляют будущие GMod menu-команды; stock hl2mp spawnmenu не реализует.
+Конфигурация запуска использует `-basedir Documents -game garrysmod` и главное меню.
+Основа — hl2mp client/server с нативными расширениями sandbox. Q открывает меню
+создания, включая NPC. Полной Lua-совместимости GMod sandbox пока нет.
+Шестерёнка включает редактор тач-кнопок: перемещение, размер, OK для сохранения.
+[NPC, управление и перечень контента для Claude](docs/npc_touch_port.md).
 
-Критерий G1: реальный iPhone загружает карту и ходит тачем. До этого статус остаётся
-неподтверждённым независимо от наличия artifact.
+Критерий G1: реальный iPhone загружает карту и ходит тачем. Пользователь сообщил
+о примерно играбельном состоянии; новые возможности проверяются отдельно.
 
 Host-test на Windows: `cmake -S . -B build-host -A x64 -DGMOD_BUILD_ENGINE=OFF`,
 затем `cmake --build build-host --config Debug` и `ctest --test-dir build-host -C Debug`.
