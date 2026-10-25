@@ -259,6 +259,31 @@ change(path, '\tSetModel( szModelName );\n\tSetupPlayerSoundsByModel( szModelNam
 # Sandbox: no 5 s wait between player model changes.
 change('game/shared/hl2mp/hl2mp_gamerules.cpp', '\t\tif ( pHL2Player->GetNextModelChangeTime() >= gpGlobals->curtime )',
        '\t\tif ( false && pHL2Player->GetNextModelChangeTime() >= gpGlobals->curtime )	// GModPort: no wait in sandbox')
+# Sandbox: noclip without sv_cheats (GMod's sbox_noclip defaults to on) and the flashlight on.
+change('game/server/client.cpp', 'static ConCommand noclip("noclip", CC_Player_NoClip, "Toggle. Player becomes non-solid and flies.", FCVAR_CHEAT);',
+       'static ConCommand noclip("noclip", CC_Player_NoClip, "Toggle. Player becomes non-solid and flies.", 0);	// GModPort: sandbox noclip')
+change('game/server/client.cpp', 'void CC_Player_NoClip( void )\n{\n\tif ( !sv_cheats->GetBool() )\n\t\treturn;\n',
+       'void CC_Player_NoClip( void )\n{\n\t// GModPort: no sv_cheats check, sandbox noclip\n')
+change('game/server/game.cpp', '#else\nConVar	flashlight( "mp_flashlight","0", FCVAR_NOTIFY );',
+       '#else\nConVar	flashlight( "mp_flashlight","1", FCVAR_NOTIFY );	// GModPort: GMod has the flashlight on')
+# Saved touch profiles (touch.cfg) predate the noclip / flashlight buttons: add them when missing.
+change('game/client/touch.cpp', '\telse\n\t\tResetToDefaults();\n\n\tCTouchTexture *texture = new CTouchTexture;',
+       '\telse\n\t\tResetToDefaults();\n\n'
+       '\t// GModPort: buttons added after a profile was saved.\n'
+       '\tstatic const struct { const char *name, *texture, *command; float x1, y1, x2, y2; } s_NewButtons[] = {\n'
+       '\t\t{ "noclip", "vgui/touch/gmp_noclip", "noclip", 0.29f, 0.02f, 0.37f, 0.13f },\n'
+       '\t\t{ "flashlight", "vgui/touch/gmp_light", "impulse 100", 0.49f, 0.02f, 0.57f, 0.13f },\n'
+       '\t};\n'
+       '\tfor ( int n = 0; n < ARRAYSIZE( s_NewButtons ); n++ )\n'
+       '\t{\n'
+       '\t\tbool have = false;\n'
+       '\t\tfor ( int i = 0; i < btns.Count() && !have; ++i )\n'
+       '\t\t\thave = !Q_strcmp( btns[i]->name, s_NewButtons[n].name );\n'
+       '\t\tif ( !have )\n'
+       '\t\t\tAddButton( s_NewButtons[n].name, s_NewButtons[n].texture, s_NewButtons[n].command,\n'
+       '\t\t\t\ts_NewButtons[n].x1, s_NewButtons[n].y1, s_NewButtons[n].x2, s_NewButtons[n].y2, rgba_t(255,255,255,255) );\n'
+       '\t}\n\n'
+       '\tCTouchTexture *texture = new CTouchTexture;')
 change('game/client/hl2mp/c_hl2mp_player.cpp', 'static ConVar cl_defaultweapon( "cl_defaultweapon", "weapon_physcannon"',
        'static ConVar cl_defaultweapon( "cl_defaultweapon", "weapon_physgun"')
 # Visible round joystick for the _move zone (radius touch_forwardzone of the screen height).

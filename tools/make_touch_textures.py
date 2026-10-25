@@ -19,6 +19,7 @@ BUTTONS = {
     'gmp_spawnmenu': 'Q', 'gmp_contextmenu': 'C', 'gmp_menu': 'MENU',
     'gmp_prev': '<', 'gmp_next': '>',
     'gmp_settings': '@gear', 'gmp_done': 'OK',
+    'gmp_noclip': 'FLY', 'gmp_light': 'LAMP',
 }
 FONT = {  # 5x7 glyphs, one string per row
     '<': ['00010', '00100', '01000', '10000', '01000', '00100', '00010'],
@@ -40,6 +41,7 @@ FONT = {  # 5x7 glyphs, one string per row
     'R': ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
     'S': ['01111', '10000', '10000', '01110', '00001', '00001', '11110'],
     'T': ['11111', '00100', '00100', '00100', '00100', '00100', '00100'],
+    'Y': ['10001', '10001', '01010', '00100', '00100', '00100', '00100'],
     'U': ['10001', '10001', '10001', '10001', '10001', '10001', '01110'],
 }
 # TEXTUREFLAGS_CLAMPS | CLAMPT | NOMIP | NOLOD | EIGHTBITALPHA
