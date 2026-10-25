@@ -7,20 +7,24 @@ against your own install; the output never goes to the repository or CI.
 
 usage: python tools/make_port_assets.py <GarrysMod dir> [out/portshaders]
 """
+import io
 import struct
 import sys
 from pathlib import Path
 
 from PIL import Image
 
+from extract_npc_content import Vpk
+
 # TEXTUREFLAGS_CLAMPS | CLAMPT | NOMIP | NOLOD | EIGHTBITALPHA
 FLAGS = 0x4 | 0x8 | 0x100 | 0x200 | 0x2000
 IMAGE_FORMAT_RGBA8888 = 0
 IMAGE_FORMAT_UNKNOWN = -1
-# name -> (source relative to the install, power-of-two size it is stretched to;
-# the vgui panels draw it back at the source aspect)
+# name -> (source relative to the install, or 'vpk:' + a path inside garrysmod_dir.vpk; power-of-two
+# size it is stretched to; the vgui panels draw it back at the source aspect)
 ASSETS = {
     'logo': ('garrysmod/gamemodes/sandbox/logo.png', (512, 256)),
+    'playermodel': ('vpk:materials/icon64/playermodel.png', (64, 64)),   # C menu desktop icon
 }
 VMT = '"UnlitGeneric"\n{\n\t"$basetexture" "gmp/%s"\n\t"$translucent" 1\n\t"$vertexcolor" 1\n\t"$vertexalpha" 1\n\t"$ignorez" 1\n\t"$nolod" 1\n}\n'
 
@@ -39,8 +43,14 @@ def main():
     out = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(__file__).resolve().parents[2] / 'out' / 'portshaders'
     target = out / 'materials' / 'gmp'
     target.mkdir(parents=True, exist_ok=True)
+    vpk = None
     for name, (source, size) in ASSETS.items():
-        image = Image.open(gmod / source).convert('RGBA').resize(size, Image.LANCZOS)
+        if source.startswith('vpk:'):
+            vpk = vpk or Vpk(gmod / 'garrysmod' / 'garrysmod_dir.vpk')
+            data = io.BytesIO(vpk.read(source[4:]))
+        else:
+            data = gmod / source
+        image = Image.open(data).convert('RGBA').resize(size, Image.LANCZOS)
         (target / f'{name}.vtf').write_bytes(vtf(image))
         (target / f'{name}.vmt').write_text(VMT % name)
         print(f'{source} -> {target / name}.vtf {size[0]}x{size[1]}')

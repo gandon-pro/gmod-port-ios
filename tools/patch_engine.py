@@ -247,6 +247,18 @@ change(path, '\tGiveNamedItem( "weapon_physcannon" );\n\n\tconst char *szDefault
        '\tGiveNamedItem( "weapon_physcannon" );\n\tGiveNamedItem( "weapon_physgun" );\n\n\tconst char *szDefaultWeaponName')
 change(path, '\t\tWeapon_Switch( Weapon_OwnsThisType( "weapon_physcannon" ) );\n\t}\n}',
        '\t\tWeapon_Switch( Weapon_OwnsThisType( "weapon_physgun" ) );\n\t}\n}')
+# GMod player models (C menu > Player Model): models/player/*.mdl pass validation, precached on
+# demand, and every model set reapplies cl_playerskin / cl_playerbodygroups (gmp_context_menu.inl).
+change(path, 'bool CHL2MP_Player::ValidatePlayerModel( const char *pModel )\n{\n',
+       'extern bool GMP_AcceptPlayerModel( const char *pModel );\n'
+       'extern void GMP_ApplyPlayerLook( CBasePlayer *pPlayer );\n\n'
+       'bool CHL2MP_Player::ValidatePlayerModel( const char *pModel )\n{\n'
+       '\tif ( GMP_AcceptPlayerModel( pModel ) )\n\t\treturn true;\n\n')
+change(path, '\tSetModel( szModelName );\n\tSetupPlayerSoundsByModel( szModelName );\n\n\tm_flNextModelChangeTime = gpGlobals->curtime + MODEL_CHANGE_INTERVAL;\n}\n\nvoid CHL2MP_Player::SetupPlayerSoundsByModel',
+       '\tSetModel( szModelName );\n\tSetupPlayerSoundsByModel( szModelName );\n\tGMP_ApplyPlayerLook( this );\n\n\tm_flNextModelChangeTime = gpGlobals->curtime + MODEL_CHANGE_INTERVAL;\n}\n\nvoid CHL2MP_Player::SetupPlayerSoundsByModel')
+# Sandbox: no 5 s wait between player model changes.
+change('game/shared/hl2mp/hl2mp_gamerules.cpp', '\t\tif ( pHL2Player->GetNextModelChangeTime() >= gpGlobals->curtime )',
+       '\t\tif ( false && pHL2Player->GetNextModelChangeTime() >= gpGlobals->curtime )	// GModPort: no wait in sandbox')
 change('game/client/hl2mp/c_hl2mp_player.cpp', 'static ConVar cl_defaultweapon( "cl_defaultweapon", "weapon_physcannon"',
        'static ConVar cl_defaultweapon( "cl_defaultweapon", "weapon_physgun"')
 # Visible round joystick for the _move zone (radius touch_forwardzone of the screen height).

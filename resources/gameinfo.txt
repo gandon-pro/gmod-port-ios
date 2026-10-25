@@ -27,6 +27,8 @@
 			game	gmcontent/sourceengine/hl2_sound_misc.vpk
 			game	gmcontent/sourceengine/hl2_misc.vpk
 			game	gmcontent/sourceengine
+			// Episodic NPC models/sounds/particles not in the VPKs above (tools/extract_npc_content.py).
+			game	gmcontent/npcpack
 			platform	gmcontent/platform/platform_misc.vpk
 			platform	gmcontent/platform
 			// The POSIX font loader opens "platform/resource/linux_fonts/*.ttf" relative to a search path.

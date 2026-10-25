@@ -30,6 +30,8 @@ import zlib
 
 from PIL import Image
 
+import extract_npc_content
+
 APP = 'Payload/GModPort.app/'
 PAK = APP + 'gmcontent.gmpk'
 # Same set the gameinfo.txt search paths reference. content_hl2/content_cstrike
@@ -42,6 +44,9 @@ LINUX_FONTS = 'platform/resource/linux_fonts'
 # GMod's .vcs do not match this engine's shader combo layout (HUD/fonts draw nothing); a pack
 # of matching .vcs picked from the GMod/HL2 VPKs by gmod_port/tools/vcs_match.py --pack.
 PORTSHADERS = 'portshaders'
+# Episodic NPC assets (hunter, zombine, antlion worker/grub...) out of content_hl2, which is not
+# shipped whole; tools/extract_npc_content.py. Mounted after the VPKs as gmcontent/npcpack.
+NPCPACK = 'npcpack'
 SKIP_GARRYSMOD = {'cache', 'download', 'downloads', 'logs', 'screenshots', 'videos', 'gameinfo.txt',
                   'cfg/config.cfg', 'console.log'}
 # CFBundleIconFiles base names -> files (iPhone 60pt @2x/@3x, iPad 76pt @2x)
@@ -161,6 +166,13 @@ def main():
             print('warning: no menu art in the port pack; run tools/make_port_assets.py')
     else:
         print(f'warning: no shader pack at {shaders}; HUD and text will not render')
+    if not args.icon_only and (args.gmod / extract_npc_content.SOURCE_VPK).is_file():
+        npcpack = Path(__file__).resolve().parents[2] / 'out' / NPCPACK
+        if not npcpack.is_dir():
+            extract_npc_content.extract(args.gmod, npcpack)
+        for path in sorted(npcpack.rglob('*')):
+            if path.is_file():
+                files.append((path, f'{NPCPACK}/{path.relative_to(npcpack).as_posix()}'))
     exe = args.gmod / 'gmod.exe'
     icon = exe_icon(exe) if exe.is_file() else None
     icons = icon_files(icon) if icon else {}

@@ -1064,6 +1064,13 @@ private:
 		if ( !ok )
 			return false;
 		panel->SetSkin( item.skin );
+		if ( !Q_strnicmp( item.model.Get(), "models/player/", 14 ) )
+		{
+			// GMod's player model icons: head and shoulders from the front (a player stands 72 units tall).
+			panel->SetCameraPositionAndAngles( vec3_origin, QAngle( 0, 180, 0 ) );
+			panel->LookAt( Vector( 0, 0, 58 ), 18.0f );
+			return true;
+		}
 		// GMod's spawn icon view: from the front left, slightly above.
 		panel->SetCameraPositionAndAngles( vec3_origin, QAngle( 25, 220, 0 ) );
 		panel->LookAtMDL();
@@ -1283,9 +1290,10 @@ static vgui::DHANDLE<CGMPSpawnMenu> g_hGMPSpawnMenu;
 // Touch look/move stays off while the menu is open (cdll_client_int.cpp IN_TouchEvent), or
 // scrolling it would also turn the camera.
 extern bool ( *g_pfnGMPTouchBlocked )( void );
+static bool GMP_ContextMenuIsOpen( void );
 static bool GMP_SpawnMenuIsOpen( void )
 {
-	return g_hGMPSpawnMenu.Get() && g_hGMPSpawnMenu->IsVisible();
+	return ( g_hGMPSpawnMenu.Get() && g_hGMPSpawnMenu->IsVisible() ) || GMP_ContextMenuIsOpen();
 }
 
 // +menu toggles rather than shows-while-held: a touch button cannot stay pressed while
@@ -1303,3 +1311,5 @@ static void GMP_SpawnMenuUp( const CCommand &args ) {}
 static ConCommand gmp_menu_down( "+menu", GMP_SpawnMenuDown, "GModPort: toggle the spawn menu" );
 static ConCommand gmp_menu_up( "-menu", GMP_SpawnMenuUp );
 #endif // CLIENT_DLL
+
+#include "gmp_context_menu.inl"
