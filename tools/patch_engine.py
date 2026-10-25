@@ -113,9 +113,18 @@ change('launcher/launcher.cpp', '\t\tchar const *pOverrideDir = CommandLine()->C
 change('launcher/launcher.cpp', '\t\t{ "video_services" DLL_EXT_STRING,  VIDEO_SERVICES_INTERFACE_VERSION },\n',
        '#if !defined(SOURCE_IOS)\n\t\t{ "video_services" DLL_EXT_STRING,  VIDEO_SERVICES_INTERFACE_VERSION },\n#endif\n')
 # serverbrowser/friends are separate dlls that iOS does not build (static modules only),
-# and a missing one is a fatal Error(); GameUI ignores the return value.
+# and a missing one is a fatal Error(). Initializing the empty module list still marks the
+# platform ready, which BasePanel waits for before fading the main menu in.
 change('gameui/VGuiSystemModuleLoader.cpp', '\tif ( IsX360() )\n\t{\n\t\t// not valid for 360\n\t\treturn false;\n\t}\n\n\tbool bSuccess = true;\n\n\t// load platform menu',
-       '\tif ( IsX360() )\n\t{\n\t\t// not valid for 360\n\t\treturn false;\n\t}\n#if defined(SOURCE_IOS)\n\treturn false;\n#endif\n\n\tbool bSuccess = true;\n\n\t// load platform menu')
+       '\tif ( IsX360() )\n\t{\n\t\t// not valid for 360\n\t\treturn false;\n\t}\n#if defined(SOURCE_IOS)\n\treturn InitializeAllModules(factorylist, factorycount);\n#endif\n\n\tbool bSuccess = true;\n\n\t// load platform menu')
+# ImagePanel prefixes "vgui/", so "../gmp/logo" becomes "vgui/../gmp/logo": Windows resolves the
+# '..' through a missing directory, POSIX and VPK lookups do not. Collapse it before the lookup.
+change('vguimatsurface/TextureDictionary.cpp',
+       'void CMatSystemTexture::SetMaterial( const char *pFileName )\n{\n\t// Get a pointer to the new material\n\tIMaterial *pMaterial',
+       'void CMatSystemTexture::SetMaterial( const char *pFileName )\n{\n#if defined(SOURCE_IOS)\n'
+       '\tchar szCollapsed[MAX_PATH];\n\tV_strncpy( szCollapsed, pFileName, sizeof( szCollapsed ) );\n'
+       '\tV_FixSlashes( szCollapsed, \'/\' );\n\tV_RemoveDotSlashes( szCollapsed, \'/\' );\n\tpFileName = szCollapsed;\n#endif\n'
+       '\t// Get a pointer to the new material\n\tIMaterial *pMaterial')
 # Apple GLES stops at 3.0: no glDrawRangeElementsBaseVertex (ES 3.2). FlushDrawStates
 # already receives the base vertex, so fold it into the vertex attrib pointer offsets
 # and draw with plain glDrawRangeElements (indices are then relative to the base).
