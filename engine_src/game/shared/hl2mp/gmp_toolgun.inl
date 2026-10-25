@@ -23,7 +23,7 @@
 #endif
 
 #define GMP_TOOL_ROPE_MATERIAL	"cable/rope.vmt"
-#define GMP_TOOL_SHOOT_SOUND	"weapons/airboat/airboat_gun_lastshot1.wav"
+#define GMP_TOOL_SHOOT_SOUND	"Airboat.FireGunRevDown"	// GMod's tool shot (hl2_game_sounds_vehicles.txt)
 
 enum GMPToolType_t { GMP_TOOL_REMOVER, GMP_TOOL_WELD, GMP_TOOL_NOCOLLIDE, GMP_TOOL_ROPE, GMP_TOOL_COLOR, GMP_TOOL_COUNT };
 
@@ -330,9 +330,12 @@ void CWeaponGMPToolGun::Fire( CBasePlayer *pOwner, int button )
 	{
 		SendWeaponAnim( ACT_VM_PRIMARYATTACK );
 		pOwner->SetAnimation( PLAYER_ATTACK1 );
-		CPASAttenuationFilter filter( this, ATTN_NORM );	// a raw wave, not a sound script entry
-		filter.UsePredictionRules();
-		EmitSound( filter, entindex(), GMP_TOOL_SHOOT_SOUND );
+#ifndef CLIENT_DLL
+		// Server only, no prediction rules, emitted from the owner like CBaseCombatWeapon::WeaponSound
+		// (a held weapon is not spatialized on the client, so its own sounds are dropped).
+		CPASAttenuationFilter filter( pOwner, GMP_TOOL_SHOOT_SOUND );
+		EmitSound( filter, pOwner->entindex(), GMP_TOOL_SHOOT_SOUND );
+#endif
 		m_flTimeWeaponIdle = gpGlobals->curtime + SequenceDuration();
 	}
 

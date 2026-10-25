@@ -517,6 +517,21 @@ change('game/client/weapons_resource.cpp',
        '\t\tQ_snprintf( sz, sizeof( sz ), "scripts/weapons/%s", pWeaponInfo->szClassName );\n'
        '\t\tLoadHudTextures( tempList, sz, NULL );\n'
        '\t}\n')
+# Texture icons (gmod_tool's vgui/gmod_tool is 256x128) are drawn at texel size; scale them to fit the box.
+HWS='game/client/hl2/hud_weaponselection.cpp'
+size='\t\t\t\tint iconHeight = pWeapon->GetSpriteActive()->Height();\n'
+change(HWS, size, size+
+       '\t\t\t\tif ( !pWeapon->GetSpriteActive()->bRenderUsingFont && iconWidth > 0 && iconHeight > 0 )\n'
+       '\t\t\t\t{\n'
+       '\t\t\t\t\t// GModPort: texture icons are scaled to fit the box.\n'
+       '\t\t\t\t\tfloat flFit = MIN( boxWide * 0.9f / iconWidth, boxTall * 0.6f / iconHeight );\n'
+       '\t\t\t\t\ticonWidth = (int)( iconWidth * flFit );\n'
+       '\t\t\t\t\ticonHeight = (int)( iconHeight * flFit );\n'
+       '\t\t\t\t}\n')
+draw = ('\t\t\t\t\tpWeapon->GetSpriteActive()->DrawSelf( xpos + x_offs, ypos + y_offs, col );\n'
+        '\t\t\t\t}\n\t\t\t\t\n\t\t\t\t// draw the inactive version\n'
+        '\t\t\t\tpWeapon->GetSpriteInactive()->DrawSelf( xpos + x_offs, ypos + y_offs, col );\n')
+change(HWS, draw, draw.replace(', col )', ', iconWidth, iconHeight, col )'))
 # GMod has no suit power: sprint, flashlight and air never run out.
 before='\t// Suitpower cheat on?\n\tif ( sv_infinite_aux_power.GetBool() )\n\t\treturn true;\n'
 change('game/server/hl2/hl2_player.cpp', before,

@@ -17,4 +17,25 @@ WeaponData
 	"autoswitchto"	"0"
 	"autoswitchfrom"	"0"
 	"item_flags"	"0"
+
+	// Selection icon: GMod's vgui/gmod_tool (256x128); hud_weaponselection scales it to the box.
+	TextureData
+	{
+		"weapon"
+		{
+			"file"		"vgui/gmod_tool"
+			"x"			"0"
+			"y"			"0"
+			"width"		"256"
+			"height"	"128"
+		}
+		"weapon_s"
+		{
+			"file"		"vgui/gmod_tool"
+			"x"			"0"
+			"y"			"0"
+			"width"		"256"
+			"height"	"128"
+		}
+	}
 }
