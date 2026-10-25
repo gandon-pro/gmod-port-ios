@@ -29,8 +29,11 @@ def apply(root):
     # The original SP-only cast rejected MP weapons during NPC weapon searches.
     path = 'game/server/hl2/npc_citizen17.cpp'
     text = read(path)
-    write(path, text.replace('CBaseHLCombatWeapon *pWeapon = dynamic_cast<CBaseHLCombatWeapon *>(Weapon_FindUsable( WEAPON_SEARCH_DELTA ));',
-                             'CBaseCombatWeapon *pWeapon = Weapon_FindUsable( WEAPON_SEARCH_DELTA );'))
+    text = text.replace('CBaseHLCombatWeapon *pWeapon = dynamic_cast<CBaseHLCombatWeapon *>(Weapon_FindUsable( WEAPON_SEARCH_DELTA ));',
+                        'CBaseCombatWeapon *pWeapon = dynamic_cast<CBaseCombatWeapon *>(Weapon_FindUsable( WEAPON_SEARCH_DELTA ));')
+    text = text.replace('CBaseCombatWeapon *pWeapon = Weapon_FindUsable( WEAPON_SEARCH_DELTA );',
+                        'CBaseCombatWeapon *pWeapon = dynamic_cast<CBaseCombatWeapon *>(Weapon_FindUsable( WEAPON_SEARCH_DELTA ));')
+    write(path, text)
 
     methods = {
         'smg1': ('CWeaponSMG1', ['FireNPCPrimaryAttack', 'Operator_ForceNPCFire',
