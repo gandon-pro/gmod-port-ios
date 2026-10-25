@@ -11,6 +11,9 @@
 
 #include "filesystem.h"
 #include "ammodef.h"
+#ifndef CLIENT_DLL
+#include "gmp_npc_server.inl"
+#endif
 
 #ifdef CLIENT_DLL
 #define CWeaponGMPPhysGun C_WeaponGMPPhysGun
@@ -564,6 +567,8 @@ struct GMPSpawnList
 	bool needsApp;
 	CUtlVector<GMPSpawnItem> items;
 };
+
+#include "gmp_npc_menu.inl"
 
 static CUtlVector<GMPSpawnList *> g_GMPSpawnLists;	// tree order: every list followed by its children
 static CUtlVector<GMPSpawnItem> g_GMPWeapons;
@@ -1129,6 +1134,7 @@ public:
 			return;
 		}
 		GMP_LoadSpawnMenu();
+		GMP_LoadNPCMenu();
 		SetBounds( 0, 0, ScreenWidth(), ScreenHeight() );
 		SelectTab( m_nTab );
 		SetVisible( true );
@@ -1229,13 +1235,15 @@ public:
 	}
 
 private:
-	static const char *const s_Tabs[3];
+	static const char *const s_Tabs[4];
 
 	void SelectTab( int tab )
 	{
 		m_nTab = tab;
 		if ( tab == 0 )
 			OnSpawnListSelected( m_pLists->Selected() );
+		else if ( tab == 3 )
+			m_pGrid->SetItems( &g_GMPNPCs );
 		else
 			m_pGrid->SetItems( tab == 1 ? &g_GMPEntities : &g_GMPWeapons );
 		InvalidateLayout();
@@ -1268,7 +1276,7 @@ private:
 	int m_nTab, m_nX0, m_nX1, m_nY0, m_nY1, m_nTabTall;
 };
 
-const char *const CGMPSpawnMenu::s_Tabs[3] = { "Spawnlists", "Entities", "Weapons" };
+const char *const CGMPSpawnMenu::s_Tabs[4] = { "Spawnlists", "Entities", "Weapons", "NPCs" };
 
 static vgui::DHANDLE<CGMPSpawnMenu> g_hGMPSpawnMenu;
 

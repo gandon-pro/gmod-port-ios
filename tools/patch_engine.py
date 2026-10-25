@@ -455,4 +455,6 @@ change('inputsystem/touch_sdl.cpp',
        '\tswitch ( event->type ) {\n')
 from patch_touch_editor import apply as patch_touch_editor
 changes.extend(patch_touch_editor(root))
+from patch_npcs import apply as patch_npcs
+changes.extend(patch_npcs(root))
 print(json.dumps({'engine_commit':pin,'platform_files_patched':changes,'game_code_modified':True},indent=2))

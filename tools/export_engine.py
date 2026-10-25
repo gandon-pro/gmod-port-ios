@@ -12,6 +12,7 @@ from pathlib import Path
 import runpy
 import sys
 import types
+from patch_npcs import NPC_SERVER_SOURCES
 
 
 class Env(dict):
@@ -104,6 +105,11 @@ def main():
                 if folder in ('game/client','game/server'):
                     extra=list((engine/folder/'gmod').rglob('*.cpp'))+list((engine/'game/shared/gmod').rglob('*.cpp'))
                     target['source'] += [str(p) for p in extra]
+                    target['defines'].append('GMP_EPISODIC_NPCS=1')
+                    if folder=='game/server':
+                        target['source'] += [str((engine/folder/p).resolve()) for p in NPC_SERVER_SOURCES]
+                        target['includes'].append(str(engine/'game/server/episodic'))
+                    target['source']=list(dict.fromkeys(target['source']))
                 result.append(target)
         except Exception as error:
             failures.append({'folder':folder,'error':str(error)})

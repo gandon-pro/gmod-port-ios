@@ -1,0 +1,23 @@
+{
+ "npc_alyx":"models/alyx.mdl", "npc_barney":"models/barney.mdl", "npc_breen":"models/breen.mdl",
+ "npc_dog":"models/dog.mdl", "npc_eli":"models/eli.mdl", "npc_gman":"models/gman.mdl",
+ "npc_kleiner":"models/kleiner.mdl", "npc_mossman":"models/mossman.mdl", "npc_vortigaunt":"models/vortigaunt.mdl",
+ "npc_citizen":"models/humans/group01/male_07.mdl", "npc_magnusson":"models/magnusson.mdl",
+ "npc_fisherman":"models/lostcoast/fisherman/fisherman.mdl", "npc_turret_floor":"models/combine_turrets/floor_turret.mdl",
+ "npc_rollermine":"models/roller.mdl", "npc_manhack":"models/manhack.mdl",
+ "npc_zombie":"models/zombie/classic.mdl", "npc_zombie_torso":"models/zombie/classic_torso.mdl",
+ "npc_poisonzombie":"models/zombie/poison.mdl", "npc_antlion":"models/antlion.mdl",
+ "npc_antlionguard":"models/antlion_guard.mdl", "npc_barnacle":"models/barnacle.mdl",
+ "npc_fastzombie":"models/zombie/fast.mdl", "npc_headcrab":"models/headcrabclassic.mdl",
+ "npc_headcrab_black":"models/headcrabblack.mdl", "npc_headcrab_fast":"models/headcrab.mdl",
+ "npc_fastzombie_torso":"models/zombie/fast_torso.mdl", "npc_zombine":"models/zombie/zombie_soldier.mdl",
+ "npc_antlion_grub":"models/antlion_grub.mdl", "npc_antlion_worker":"models/antlion_worker.mdl",
+ "npc_monk":"models/monk.mdl", "npc_crow":"models/crow.mdl", "npc_pigeon":"models/pigeon.mdl",
+ "npc_seagull":"models/seagull.mdl", "npc_metropolice":"models/police.mdl",
+ "npc_combine_s":"models/combine_soldier.mdl", "npc_cscanner":"models/combine_scanner.mdl",
+ "npc_clawscanner":"models/shield_scanner.mdl", "npc_combinegunship":"models/gunship.mdl",
+ "npc_combinedropship":"models/combine_dropship.mdl", "npc_helicopter":"models/combine_helicopter.mdl",
+ "npc_combine_camera":"models/combine_camera/combine_camera.mdl",
+ "npc_turret_ceiling":"models/combine_turrets/ceiling_turret.mdl", "npc_strider":"models/combine_strider.mdl",
+ "npc_stalker":"models/stalker.mdl", "npc_hunter":"models/hunter.mdl"
+}

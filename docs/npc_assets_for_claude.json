@@ -1,0 +1,504 @@
+{
+  "npc_variants": 61,
+  "native_classes": 45,
+  "content_only": true,
+  "required_groups": [
+    "models with .vvd/.vtx/.phy and referenced animation MDLs",
+    "referenced materials and textures",
+    "NPC weapon models and scripts",
+    "scripts/npc_sounds*.txt and their sound/ files",
+    "particles/ files for antlion workers, hunters and strider busters",
+    "cfg/skill_manifest.cfg, skill.cfg, skill1.cfg, skill2.cfg, skill3.cfg",
+    "maps/graphs/*.ain when supplied with the map"
+  ],
+  "entries": [
+    {
+      "id": "npc_alyx",
+      "entity_class": "npc_alyx",
+      "preview_model": "models/alyx.mdl",
+      "model_override": null,
+      "weapons": [
+        "weapon_alyxgun",
+        "weapon_smg1",
+        "weapon_shotgun"
+      ]
+    },
+    {
+      "id": "npc_barney",
+      "entity_class": "npc_barney",
+      "preview_model": "models/barney.mdl",
+      "model_override": null,
+      "weapons": [
+        "weapon_smg1",
+        "weapon_shotgun",
+        "weapon_ar2"
+      ]
+    },
+    {
+      "id": "npc_breen",
+      "entity_class": "npc_breen",
+      "preview_model": "models/breen.mdl",
+      "model_override": null,
+      "weapons": [
+        ""
+      ]
+    },
+    {
+      "id": "npc_dog",
+      "entity_class": "npc_dog",
+      "preview_model": "models/dog.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_eli",
+      "entity_class": "npc_eli",
+      "preview_model": "models/eli.mdl",
+      "model_override": null,
+      "weapons": [
+        ""
+      ]
+    },
+    {
+      "id": "npc_gman",
+      "entity_class": "npc_gman",
+      "preview_model": "models/gman.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_kleiner",
+      "entity_class": "npc_kleiner",
+      "preview_model": "models/kleiner.mdl",
+      "model_override": null,
+      "weapons": [
+        ""
+      ]
+    },
+    {
+      "id": "npc_mossman",
+      "entity_class": "npc_mossman",
+      "preview_model": "models/mossman.mdl",
+      "model_override": null,
+      "weapons": [
+        ""
+      ]
+    },
+    {
+      "id": "npc_vortigaunt",
+      "entity_class": "npc_vortigaunt",
+      "preview_model": "models/vortigaunt.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "VortigauntSlave",
+      "entity_class": "npc_vortigaunt",
+      "preview_model": "models/vortigaunt_slave.mdl",
+      "model_override": "models/vortigaunt_slave.mdl",
+      "weapons": []
+    },
+    {
+      "id": "npc_citizen",
+      "entity_class": "npc_citizen",
+      "preview_model": "models/humans/group01/male_07.mdl",
+      "model_override": null,
+      "weapons": [
+        ""
+      ]
+    },
+    {
+      "id": "Rebel",
+      "entity_class": "npc_citizen",
+      "preview_model": "models/humans/group03/male_07.mdl",
+      "model_override": null,
+      "weapons": [
+        "weapon_pistol",
+        "weapon_smg1",
+        "weapon_ar2",
+        "weapon_shotgun",
+        "weapon_rpg"
+      ]
+    },
+    {
+      "id": "npc_odessa",
+      "entity_class": "npc_citizen",
+      "preview_model": "models/odessa.mdl",
+      "model_override": "models/odessa.mdl",
+      "weapons": [
+        ""
+      ]
+    },
+    {
+      "id": "Medic",
+      "entity_class": "npc_citizen",
+      "preview_model": "models/humans/group03m/male_07.mdl",
+      "model_override": null,
+      "weapons": [
+        "weapon_pistol",
+        "weapon_smg1",
+        "weapon_ar2"
+      ]
+    },
+    {
+      "id": "Refugee",
+      "entity_class": "npc_citizen",
+      "preview_model": "models/humans/group02/male_07.mdl",
+      "model_override": null,
+      "weapons": [
+        "weapon_pistol",
+        "weapon_smg1"
+      ]
+    },
+    {
+      "id": "VortigauntUriah",
+      "entity_class": "npc_vortigaunt",
+      "preview_model": "models/vortigaunt_doctor.mdl",
+      "model_override": "models/vortigaunt_doctor.mdl",
+      "weapons": []
+    },
+    {
+      "id": "npc_magnusson",
+      "entity_class": "npc_magnusson",
+      "preview_model": "models/magnusson.mdl",
+      "model_override": null,
+      "weapons": [
+        ""
+      ]
+    },
+    {
+      "id": "npc_fisherman",
+      "entity_class": "npc_fisherman",
+      "preview_model": "models/lostcoast/fisherman/fisherman.mdl",
+      "model_override": null,
+      "weapons": [
+        "weapon_oldmanharpoon"
+      ]
+    },
+    {
+      "id": "npc_turret_floor_resistance",
+      "entity_class": "npc_turret_floor",
+      "preview_model": "models/combine_turrets/citizen_turret.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_rollermine_hacked",
+      "entity_class": "npc_rollermine",
+      "preview_model": "models/roller.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_manhack_hacked",
+      "entity_class": "npc_manhack",
+      "preview_model": "models/manhack.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_zombie",
+      "entity_class": "npc_zombie",
+      "preview_model": "models/zombie/classic.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_zombie_torso",
+      "entity_class": "npc_zombie_torso",
+      "preview_model": "models/zombie/classic_torso.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_poisonzombie",
+      "entity_class": "npc_poisonzombie",
+      "preview_model": "models/zombie/poison.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_antlion",
+      "entity_class": "npc_antlion",
+      "preview_model": "models/antlion.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_antlionguard",
+      "entity_class": "npc_antlionguard",
+      "preview_model": "models/antlion_guard.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_barnacle",
+      "entity_class": "npc_barnacle",
+      "preview_model": "models/barnacle.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_fastzombie",
+      "entity_class": "npc_fastzombie",
+      "preview_model": "models/zombie/fast.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_headcrab",
+      "entity_class": "npc_headcrab",
+      "preview_model": "models/headcrabclassic.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_headcrab_black",
+      "entity_class": "npc_headcrab_black",
+      "preview_model": "models/headcrabblack.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_headcrab_fast",
+      "entity_class": "npc_headcrab_fast",
+      "preview_model": "models/headcrab.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_fastzombie_torso",
+      "entity_class": "npc_fastzombie_torso",
+      "preview_model": "models/zombie/fast_torso.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_zombine",
+      "entity_class": "npc_zombine",
+      "preview_model": "models/zombie/zombie_soldier.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_antlionguardian",
+      "entity_class": "npc_antlionguard",
+      "preview_model": "models/antlion_guard.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_antlion_grub",
+      "entity_class": "npc_antlion_grub",
+      "preview_model": "models/antlion_grub.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_antlion_worker",
+      "entity_class": "npc_antlion_worker",
+      "preview_model": "models/antlion_worker.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_monk",
+      "entity_class": "npc_monk",
+      "preview_model": "models/monk.mdl",
+      "model_override": null,
+      "weapons": [
+        "weapon_annabelle"
+      ]
+    },
+    {
+      "id": "npc_crow",
+      "entity_class": "npc_crow",
+      "preview_model": "models/crow.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_pigeon",
+      "entity_class": "npc_pigeon",
+      "preview_model": "models/pigeon.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_seagull",
+      "entity_class": "npc_seagull",
+      "preview_model": "models/seagull.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_metropolice",
+      "entity_class": "npc_metropolice",
+      "preview_model": "models/police.mdl",
+      "model_override": null,
+      "weapons": [
+        "weapon_stunstick",
+        "weapon_pistol",
+        "weapon_smg1"
+      ]
+    },
+    {
+      "id": "npc_rollermine",
+      "entity_class": "npc_rollermine",
+      "preview_model": "models/roller.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_rollermine_friendly",
+      "entity_class": "npc_rollermine",
+      "preview_model": "models/roller.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_turret_floor",
+      "entity_class": "npc_turret_floor",
+      "preview_model": "models/combine_turrets/floor_turret.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_combine_s",
+      "entity_class": "npc_combine_s",
+      "preview_model": "models/combine_soldier.mdl",
+      "model_override": "models/combine_soldier.mdl",
+      "weapons": [
+        "weapon_smg1",
+        "weapon_ar2"
+      ]
+    },
+    {
+      "id": "ShotgunSoldier",
+      "entity_class": "npc_combine_s",
+      "preview_model": "models/combine_soldier.mdl",
+      "model_override": "models/combine_soldier.mdl",
+      "weapons": [
+        "weapon_shotgun"
+      ]
+    },
+    {
+      "id": "CombinePrison",
+      "entity_class": "npc_combine_s",
+      "preview_model": "models/combine_soldier_prisonguard.mdl",
+      "model_override": "models/combine_soldier_prisonguard.mdl",
+      "weapons": [
+        "weapon_smg1",
+        "weapon_ar2"
+      ]
+    },
+    {
+      "id": "PrisonShotgunner",
+      "entity_class": "npc_combine_s",
+      "preview_model": "models/combine_soldier_prisonguard.mdl",
+      "model_override": "models/combine_soldier_prisonguard.mdl",
+      "weapons": [
+        "weapon_shotgun"
+      ]
+    },
+    {
+      "id": "CombineElite",
+      "entity_class": "npc_combine_s",
+      "preview_model": "models/combine_super_soldier.mdl",
+      "model_override": "models/combine_super_soldier.mdl",
+      "weapons": [
+        "weapon_ar2"
+      ]
+    },
+    {
+      "id": "npc_cscanner",
+      "entity_class": "npc_cscanner",
+      "preview_model": "models/combine_scanner.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_clawscanner",
+      "entity_class": "npc_clawscanner",
+      "preview_model": "models/shield_scanner.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_combinegunship",
+      "entity_class": "npc_combinegunship",
+      "preview_model": "models/gunship.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_combinedropship",
+      "entity_class": "npc_combinedropship",
+      "preview_model": "models/combine_dropship.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_helicopter",
+      "entity_class": "npc_helicopter",
+      "preview_model": "models/combine_helicopter.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_combine_camera",
+      "entity_class": "npc_combine_camera",
+      "preview_model": "models/combine_camera/combine_camera.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_turret_ceiling",
+      "entity_class": "npc_turret_ceiling",
+      "preview_model": "models/combine_turrets/ceiling_turret.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_strider",
+      "entity_class": "npc_strider",
+      "preview_model": "models/combine_strider.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_stalker",
+      "entity_class": "npc_stalker",
+      "preview_model": "models/stalker.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_manhack",
+      "entity_class": "npc_manhack",
+      "preview_model": "models/manhack.mdl",
+      "model_override": null,
+      "weapons": []
+    },
+    {
+      "id": "npc_citizen_rebel_enemy",
+      "entity_class": "npc_citizen",
+      "preview_model": "models/humans/group03/male_07.mdl",
+      "model_override": null,
+      "weapons": [
+        "weapon_pistol",
+        "weapon_smg1",
+        "weapon_ar2",
+        "weapon_shotgun",
+        "weapon_rpg"
+      ]
+    },
+    {
+      "id": "npc_hunter",
+      "entity_class": "npc_hunter",
+      "preview_model": "models/hunter.mdl",
+      "model_override": null,
+      "weapons": []
+    }
+  ]
+}
