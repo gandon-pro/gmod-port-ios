@@ -11,6 +11,7 @@ Personal use: the output is Valve content and stays on this machine, never in gi
   py -3.13 tools/extract_npc_content.py "E:/SteamLibrary/steamapps/common/GarrysMod" ../out/npcpack
 """
 import argparse
+import json
 import re
 import struct
 import sys
@@ -34,7 +35,19 @@ SEED_PREFIXES = [
     'particles/hunter_', 'particles/antlion_worker', 'particles/antlion_gib', 'particles/grub_blood',
     'scripts/npc_sounds_zombine', 'scripts/npc_sounds_hunter', 'scripts/npc_sounds_ministrider',
     'scripts/npc_sounds_antlion_episodic', 'scripts/npc_sounds_antliongrub',
+    # GMod's game_sounds_manifest precaches every episodic script and its particles_manifest every pcf.
+    'scripts/npc_sounds_', 'scripts/game_sounds_physics_ep2', 'particles/',
 ]
+# Sound scripts whose waves may live only in content_hl2 (episodic scripts GMod ships itself, too).
+SOUND_SCRIPTS = re.compile(r'^scripts/(sounds/)?(npc_sounds_|game_sounds_physics_ep2|game_sounds_weapons_ep)')
+# World models of the weapons NPCs carry (spawnmenu NPC catalog, docs/npc_assets_for_claude.json).
+NPC_WEAPON_MODELS = {
+    'weapon_alyxgun': 'models/weapons/w_alyx_gun.mdl', 'weapon_annabelle': 'models/weapons/w_annabelle.mdl',
+    'weapon_ar2': 'models/weapons/w_irifle.mdl', 'weapon_pistol': 'models/weapons/w_pistol.mdl',
+    'weapon_rpg': 'models/weapons/w_rocket_launcher.mdl', 'weapon_shotgun': 'models/weapons/w_shotgun.mdl',
+    'weapon_smg1': 'models/weapons/w_smg1.mdl', 'weapon_stunstick': 'models/weapons/w_stunbaton.mdl',
+}
+CATALOG = Path(__file__).resolve().parents[1] / 'docs' / 'npc_assets_for_claude.json'
 MODEL_EXTS = ('.mdl', '.vvd', '.dx90.vtx', '.dx80.vtx', '.sw.vtx', '.vtx', '.phy', '.ani')
 SHIPPED_VPKS = ['garrysmod/garrysmod_dir.vpk', 'garrysmod/fallbacks_dir.vpk', 'sourceengine/hl2_misc_dir.vpk',
                 'sourceengine/hl2_textures_dir.vpk', 'sourceengine/hl2_sound_misc_dir.vpk',
@@ -130,18 +143,28 @@ def norm(p):
     return p.lstrip('/')
 
 
-def extract(gmod, out):
+def extract(gmod, out, catalog=CATALOG):
     src = Vpk(gmod / SOURCE_VPK)
-    shipped = set()
+    owner = {}      # shipped name -> its VPK, so shipped models and VMTs are followed too
     for v in SHIPPED_VPKS:
         if (gmod / v).is_file():
-            shipped |= set(Vpk(gmod / v).entries)
+            vpk = Vpk(gmod / v)
+            for name in vpk.entries:
+                owner.setdefault(name, vpk)
+    shipped = owner.keys()
 
     def available(name):
         return name in src.entries and name not in shipped
 
+    def read(name):
+        return owner[name].read(name) if name in owner else src.read(name)
+
     take = set()
     queue = [m for m in SEED_MODELS]
+    if catalog and catalog.is_file():
+        for e in json.loads(catalog.read_text(encoding='utf-8'))['entries']:
+            queue += [m for m in (e.get('preview_model'), e.get('model_override')) if m]
+            queue += [NPC_WEAPON_MODELS[w] for w in e.get('weapons') or [] if w in NPC_WEAPON_MODELS]
     for p in SEED_PREFIXES:
         for name in src.entries:
             if name.startswith(p) and name not in shipped:
@@ -156,16 +179,15 @@ def extract(gmod, out):
         if m in seen:
             continue
         seen.add(m)
-        if m not in src.entries:
-            if m not in shipped:
-                print(f'warning: {m} is in no VPK')
+        if m not in src.entries and m not in shipped:
+            print(f'warning: {m} is in no VPK')
             continue
         base = m[:-4]
         for ext in MODEL_EXTS:
             if available(base + ext):
                 take.add(base + ext)
-        cddirs, textures, includes = mdl_refs(src.read(m))
-        queue += includes
+        cddirs, textures, includes = mdl_refs(read(m))
+        queue += includes   # animation MDLs ($includemodels)
         for t in textures:
             for d in cddirs or ['']:
                 vmt = norm(f'materials/{d}/{t}.vmt')
@@ -175,16 +197,25 @@ def extract(gmod, out):
     for name in list(take):
         if name.endswith('.vmt'):
             vmts.append(name)
+        elif name.endswith('.pcf'):
+            for mat in set(re.findall(rb'[\w/\\.-]+\.vmt', src.read(name))):
+                vmts.append(norm('materials/' + mat.decode('latin1')))
+    # Waves of the NPC sound scripts that only content_hl2 has.
+    for name in sorted(set(src.entries) | set(shipped)):
+        if SOUND_SCRIPTS.match(name) and name.endswith('.txt') and (name in shipped or name in take):
+            for wave in re.findall(r'"wave"\s+"([^"]+)"', read(name).decode('latin1', 'replace')):
+                snd = 'sound/' + norm(wave.lstrip('*#@<>^)}$!?&~(').strip())
+                if available(snd):
+                    take.add(snd)
     done = set()
     while vmts:
         vmt = vmts.pop()
-        if vmt in done:
+        if vmt in done or not (vmt in src.entries or vmt in shipped):
             continue
         done.add(vmt)
-        if not available(vmt):
-            continue
-        take.add(vmt)
-        text = src.read(vmt).decode('latin1', 'replace')
+        if available(vmt):
+            take.add(vmt)
+        text = read(vmt).decode('latin1', 'replace')
         for key, val in re.findall(r'"?(\$\w+|include)"?\s+"?([^"\r\n]+?)"?\s*(?:\r?\n|$)', text, re.I):
             val = norm(val)
             if key.lower() == 'include':
