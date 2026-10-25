@@ -50,13 +50,14 @@ def apply(root):
     relationships=relationships[:-1]+setup+'}\n'
     write('game/shared/hl2mp/gmp_npc_relationships.inl',
           '// Generated from pinned HL2 game rules; retains its complete relationship table.\n'
-          '#ifndef CLIENT_DLL\nvoid CHL2MPRules::InitDefaultAIRelationships( void )\n'+relationships+
+          '#ifndef CLIENT_DLL\n#include "ai_basenpc.h"\nvoid CHL2MPRules::InitDefaultAIRelationships( void )\n'+relationships+
           '\nconst char* CHL2MPRules::AIClassText(int classType)\n'+names+'\n#endif\n')
     replace('game/shared/hl2mp/hl2mp_gamerules.h',
             '\tDECLARE_CLASS( CHL2MPRules, CTeamplayRules );',
             '\tDECLARE_CLASS( CHL2MPRules, CTeamplayRules );\n#ifndef CLIENT_DLL\n'
             '\tvirtual void InitDefaultAIRelationships( void );\n\tvirtual const char* AIClassText(int classType);\n#endif')
     path='game/shared/hl2mp/hl2mp_gamerules.cpp'
+    replace(path,'#include "ammodef.h"','#include "ammodef.h"\n#include "hl2_shareddefs.h"')
     text=(root/path).read_text(encoding='utf-8')
     if '#include "gmp_npc_relationships.inl"' not in text:
         write(path,text+'\n#include "gmp_npc_relationships.inl"\n')
@@ -77,11 +78,20 @@ def apply(root):
     # Enable the native worker and guardian portions without changing the whole
     # game to single-player episodic mode. Shared class layouts use the same flag.
     for path in ['game/server/hl2/npc_antlion.cpp','game/server/hl2/npc_antlion.h',
-                 'game/server/hl2/npc_antlionguard.cpp','game/client/hl2/c_npc_antlionguard.cpp']:
+                 'game/server/hl2/npc_antlionguard.cpp','game/client/hl2/c_npc_antlionguard.cpp',
+                 'game/server/hl2/npc_strider.cpp','game/server/hl2/npc_strider.h']:
         text=(root/path).read_text(encoding='utf-8')
         text=re.sub(r'^([ \t]*)#(?:ifdef|if)\s+HL2_EPISODIC\b([^\n]*)',
                     r'\1#if defined(HL2_EPISODIC) || defined(GMP_EPISODIC_NPCS)\2',text,flags=re.M)
         write(path,text)
+    replace('game/shared/shareddefs.h',
+            '#if defined( HL2_EPISODIC )\n\tBLOOD_COLOR_ANTLION,',
+            '#if defined( HL2_EPISODIC ) || defined(GMP_EPISODIC_NPCS)\n\tBLOOD_COLOR_ANTLION,')
+    path='game/server/hl2/npc_antlion.cpp'
+    text=(root/path).read_text(encoding='utf-8')
+    marker='// GModPort: worker behavior must not require the single-player episodic mode.\n'
+    if marker not in text:
+        write(path,marker+text.replace('hl2_episodic.GetBool()', '(hl2_episodic.GetBool() || IsWorker())'))
     replace('game/server/hl2/npc_antlion.cpp',
             'LINK_ENTITY_TO_CLASS( npc_antlion, CNPC_Antlion );',
             'LINK_ENTITY_TO_CLASS( npc_antlion, CNPC_Antlion );\nLINK_ENTITY_TO_CLASS( npc_antlion_worker, CNPC_Antlion );')
