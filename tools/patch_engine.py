@@ -354,25 +354,6 @@ change('game/client/touch.cpp', '\telse\n\t\tResetToDefaults();\n\n\tCTouchTextu
        '\t\t\t\ts_NewButtons[n].x1, s_NewButtons[n].y1, s_NewButtons[n].x2, s_NewButtons[n].y2, rgba_t(255,255,255,255) );\n'
        '\t}\n\n'
        '\tCTouchTexture *texture = new CTouchTexture;')
-# HL2MP never fills the NPC relationship table: every pair stays D_ER ("x doesn't like y"), so
-# spawned NPCs ignore the player and each other. Use Half-Life 2's table.
-change('game/shared/hl2/hl2_gamerules.cpp', '\tvoid CHalfLife2::InitDefaultAIRelationships( void )\n\t{\n',
-       '\t// GModPort: also the HL2MP sandbox table (hl2mp_gamerules.cpp).\n'
-       '\tvoid GMP_InitHL2AIRelationships( void );\n'
-       '\tvoid CHalfLife2::InitDefaultAIRelationships( void ) { GMP_InitHL2AIRelationships(); }\n'
-       '\tvoid GMP_InitHL2AIRelationships( void )\n\t{\n')
-change('game/shared/hl2mp/hl2mp_gamerules.h',
-       '\tDECLARE_SERVERCLASS_NOBASE(); // This makes datatables able to access our private vars.\n#endif\n',
-       '\tDECLARE_SERVERCLASS_NOBASE(); // This makes datatables able to access our private vars.\n'
-       '\tvirtual void InitDefaultAIRelationships( void );\t// GModPort: HL2 NPC relationships\n#endif\n')
-change('game/shared/hl2mp/hl2mp_gamerules.cpp',
-       'void CHL2MPRules::Precache( void )\n{\n\tCBaseEntity::PrecacheScriptSound( "AlyxEmp.Charge" );\n}\n',
-       'void CHL2MPRules::Precache( void )\n{\n\tCBaseEntity::PrecacheScriptSound( "AlyxEmp.Charge" );\n}\n\n'
-       '#ifndef CLIENT_DLL\n'
-       '// GModPort: spawned NPCs need the Half-Life 2 relationship table (hl2_gamerules.cpp).\n'
-       'void GMP_InitHL2AIRelationships( void );\n'
-       'void CHL2MPRules::InitDefaultAIRelationships( void ) { GMP_InitHL2AIRelationships(); }\n'
-       '#endif\n')
 change('game/client/hl2mp/c_hl2mp_player.cpp', 'static ConVar cl_defaultweapon( "cl_defaultweapon", "weapon_physcannon"',
        'static ConVar cl_defaultweapon( "cl_defaultweapon", "weapon_physgun"')
 # Visible round joystick for the _move zone (radius touch_forwardzone of the screen height).
