@@ -21,6 +21,17 @@ def apply(root):
         pos = text.index(old, text.index(signature))
         write(path, text[:pos] + body + text[pos + len(old):])
 
+    path = 'game/shared/hl2mp/weapon_hl2mpbase.h'
+    text = read(path)
+    forward = '#ifndef CLIENT_DLL\nclass CHL2MP_Player;\n#endif\n#include "hl2mp_player_shared.h"'
+    if forward not in text:
+        write(path, text.replace('#include "hl2mp_player_shared.h"', forward, 1))
+    # The original SP-only cast rejected MP weapons during NPC weapon searches.
+    path = 'game/server/hl2/npc_citizen17.cpp'
+    text = read(path)
+    write(path, text.replace('CBaseHLCombatWeapon *pWeapon = dynamic_cast<CBaseHLCombatWeapon *>(Weapon_FindUsable( WEAPON_SEARCH_DELTA ));',
+                             'CBaseCombatWeapon *pWeapon = Weapon_FindUsable( WEAPON_SEARCH_DELTA );'))
+
     methods = {
         'smg1': ('CWeaponSMG1', ['FireNPCPrimaryAttack', 'Operator_ForceNPCFire',
                                  'Operator_HandleAnimEvent', 'WeaponRangeAttack2Condition']),
@@ -71,6 +82,22 @@ def apply(root):
         new += ''.join('\t{ %s, %s, %s },\n' % r for r in merged.values()) + '};'
         write(path, text[:table.start()] + new + text[table.end():])
 
+    # NPC accuracy differs from the MP player's cone (notably Alyx's shotgun).
+    for weapon in ('pistol', 'shotgun'):
+        path = f'game/shared/hl2mp/weapon_{weapon}.cpp'
+        text = read(path)
+        marker = '// GModPort: native NPC bullet spread.\n'
+        if marker not in text:
+            old = function_body(text, 'GetBulletSpread( void )')
+            original = read(f'game/server/hl2/weapon_{weapon}.cpp')
+            native = function_body(original, 'GetBulletSpread( void )')
+            if weapon == 'pistol':
+                prefix = native[1:native.index('static Vector cone;')]
+                body = '{\n' + marker + '#ifndef CLIENT_DLL\n' + prefix + '#endif\n' + old[1:]
+            else:
+                body = '{\n' + marker + '#ifndef CLIENT_DLL\n' + native[1:-1] + '\n#else\n' + old[1:-1] + '\n#endif\n}'
+            replace_body(path, 'GetBulletSpread( void )', body)
+
     # Ally SMGs retain their native longer NPC range.
     path = 'game/shared/hl2mp/weapon_smg1.cpp'
     body = function_body(read('game/server/hl2/weapon_smg1.cpp'), 'void CWeaponSMG1::Equip')
@@ -87,6 +114,8 @@ def apply(root):
         replace_body(path, 'CWeaponRPG::' + name, body)
     header = 'game/shared/hl2mp/weapon_rpg.h'
     text = read(header)
+    if 'static const int EXPLOSION_RADIUS' not in text:
+        text = text.replace('\tCMissile();', '\tstatic const int EXPLOSION_RADIUS = 200;\n\tCMissile();', 1)
     if 'm_vecNPCLaserDot;' not in text:
         text = text.replace('CHandle<CLaserDot>\tm_hLaserDot;', 'CHandle<CLaserDot>\tm_hLaserDot;\n\tVector m_vecNPCLaserDot;')
     if 'struct CustomDetonator_t' not in text:
