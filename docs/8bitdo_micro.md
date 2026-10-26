@@ -21,7 +21,7 @@ The Micro's **K** mode is a Bluetooth keyboard on iOS and is the manufacturer's 
 | R2 | H | Primary attack |
 | Minus | Q | Spawn menu while held |
 | Plus | P | Pause menu |
-| Home | C | Context menu while held, if the firmware permits remapping Home |
+| Heart / Home | C | Hold with D-pad to turn the camera, if the firmware permits remapping Home |
 | Star | T | Next Toolgun mode; Star needs an explicit K-mode assignment |
 
 The game loads `gmp_micro.cfg` from `gmp_bindings.cfg` at startup. The app installs both files into `Documents/garrysmod/cfg` on each launch. To change this mapping permanently, edit the bundled `resources/gmp_micro.cfg` and rebuild; the installed copy is refreshed on each launch. Keep the key assignments on the Micro and in the game identical.
@@ -37,8 +37,10 @@ Switch to **S** or **D**, hold Pair for one second, and pair again in iPhone Blu
 | L / R | Previous / next weapon |
 | L2 / R2 | Secondary / primary attack |
 | Minus / Plus | Spawn menu / pause menu |
-| Home | Context menu, if reported as a separate button |
+| Heart / Home + D-pad | Turn camera, if Home is reported as a separate button |
 
-The Star button is not assigned in S/D: the device uses it for Turbo in D mode, and the available SDL reports do not expose it as a distinct game button. In every mode, finger drag on the right half turns the camera. The action buttons should disappear on connection; tapping a hidden button area reveals them again. The touch look/move zones work while buttons are hidden. S/D recognition and button order still need a test with the physical Micro on this iPhone.
+With Heart released, the D-pad moves. Hold Heart and press D-pad left/right to turn, or up/down to look up/down. Movement from the D-pad stops while Heart is held; touch movement remains available. Camera speed can be changed in the console with `gmp_micro_look_yaw` (default 180 degrees/second) and `gmp_micro_look_pitch` (default 140 degrees/second). In K mode assign the Heart button to `C` in Ultimate Software; a firmware that does not let Home send a keyboard key cannot use this shortcut. The Heart button no longer opens the context menu.
+
+The Star button is not assigned in S/D: the device uses it for Turbo in D mode, and the available SDL reports do not expose it as a distinct game button. In every mode, finger drag on the right half also turns the camera. The action buttons should disappear on connection; tapping a hidden button area reveals them again. The touch look/move zones work while buttons are hidden. S/D recognition and button order still need a test with the physical Micro on this iPhone.
 
 Manufacturer references: [Micro compatibility and modes](https://www.8bitdo.com/micro/), [pairing manual](https://download.8bitdo.com/Manual/Controller/Micro/Micro_Manual.pdf), [D-pad and Star FAQ](https://support.8bitdo.com/faq/micro.html).

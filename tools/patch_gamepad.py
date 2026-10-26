@@ -167,4 +167,63 @@ def apply(root):
            '\t// GModPort: Micro K-mode keys hide touch buttons like controller input.\n'
            '\tif ( eventcode && ( IsKeyCode( keynum ) || IsJoystickCode( keynum ) ) )\n'
            '\t\tGMP_TouchPadInput();\n')
+
+    path = 'game/client/in_main.cpp'
+    change(path, '#include "touch.h"\n',
+           '#include "touch.h"\n'
+           '#if defined(SOURCE_IOS)\n'
+           '#include "inputsystem/iinputsystem.h"\n'
+           'extern IInputSystem *inputsystem;\n'
+           'extern "C" bool GMP_HardwareKeyboardConnected();\n'
+           'extern "C" bool GMP_MicroGamepadConnected();\n'
+           '#endif\n')
+    change(path,
+           'ConVar in_joystick( "joystick","0", FCVAR_ARCHIVE );\n',
+           'ConVar in_joystick( "joystick","0", FCVAR_ARCHIVE );\n'
+           '#if defined(SOURCE_IOS)\n'
+           'ConVar gmp_micro_look_yaw( "gmp_micro_look_yaw", "180", FCVAR_ARCHIVE, "Micro D-pad camera yaw in degrees per second" );\n'
+           'ConVar gmp_micro_look_pitch( "gmp_micro_look_pitch", "140", FCVAR_ARCHIVE, "Micro D-pad camera pitch in degrees per second" );\n'
+           '#endif\n')
+    change(path,
+           '\tJoyStickMove( frametime, cmd);\n\n'
+           '\tTouchMove( cmd );\n',
+           '\tJoyStickMove( frametime, cmd);\n\n'
+           '#if defined(SOURCE_IOS)\n'
+           '\t// Heart + D-pad switches the Micro from movement to camera control.\n'
+           '\t// Apply before TouchMove so a finger can still provide movement.\n'
+           '\tif ( inputsystem )\n'
+           '\t{\n'
+           '\t\tconst bool keyboardModifier = GMP_HardwareKeyboardConnected() && inputsystem->IsButtonDown( KEY_C );\n'
+           '\t\tconst bool gamepadModifier = GMP_MicroGamepadConnected() && inputsystem->IsButtonDown( KEY_XBUTTON_STICK1 );\n'
+           '\t\tif ( keyboardModifier || gamepadModifier )\n'
+           '\t\t{\n'
+           '\t\t\tconst ButtonCode_t up = keyboardModifier ? KEY_UP : KEY_XBUTTON_UP;\n'
+           '\t\t\tconst ButtonCode_t down = keyboardModifier ? KEY_DOWN : KEY_XBUTTON_DOWN;\n'
+           '\t\t\tconst ButtonCode_t left = keyboardModifier ? KEY_LEFT : KEY_XBUTTON_LEFT;\n'
+           '\t\t\tconst ButtonCode_t right = keyboardModifier ? KEY_RIGHT : KEY_XBUTTON_RIGHT;\n'
+           '\t\t\tconst float dt = MAX( 0.0f, MIN( frametime, 0.05f ) );\n'
+           '\t\t\tQAngle viewangles;\n'
+           '\t\t\tengine->GetViewAngles( viewangles );\n'
+           '\t\t\tviewangles[YAW] += ( int(inputsystem->IsButtonDown( left )) - int(inputsystem->IsButtonDown( right )) ) * gmp_micro_look_yaw.GetFloat() * dt;\n'
+           '\t\t\tviewangles[PITCH] += ( int(inputsystem->IsButtonDown( down )) - int(inputsystem->IsButtonDown( up )) ) * gmp_micro_look_pitch.GetFloat() * dt;\n'
+           '\t\t\tClampAngles( viewangles );\n'
+           '\t\t\tengine->SetViewAngles( viewangles );\n'
+           '\t\t\tcmd->forwardmove = 0;\n'
+           '\t\t\tcmd->sidemove = 0;\n'
+           '\t\t}\n'
+           '\t}\n'
+           '#endif\n'
+           '\tTouchMove( cmd );\n')
+    change(path,
+           '#endif\n\n'
+           '\t// Using joystick?\n',
+           '#endif\n\n'
+           '#if defined(SOURCE_IOS)\n'
+           '\t// D-pad movement binds remain held while Heart is down; only the camera uses them.\n'
+           '\tif ( inputsystem && (\n'
+           '\t\t( GMP_HardwareKeyboardConnected() && inputsystem->IsButtonDown( KEY_C ) ) ||\n'
+           '\t\t( GMP_MicroGamepadConnected() && inputsystem->IsButtonDown( KEY_XBUTTON_STICK1 ) ) ) )\n'
+           '\t\tcmd->buttons &= ~( IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT );\n'
+           '#endif\n\n'
+           '\t// Using joystick?\n')
     return changed
