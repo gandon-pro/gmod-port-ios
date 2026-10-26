@@ -21,8 +21,8 @@ The Micro's **K** mode is a Bluetooth keyboard on iOS and is the manufacturer's 
 | R2 | H | Primary attack |
 | Minus | Q | Spawn menu while held |
 | Plus | P | Pause menu |
-| Heart / Home | C | Hold with D-pad to turn the camera, if the firmware permits remapping Home |
-| Star | T | Next Toolgun mode; Star needs an explicit K-mode assignment |
+| Heart / Home | Leave unassigned | Power/system button; do not use for camera |
+| Star | T | Hold with D-pad to turn camera; tap to select next Toolgun mode |
 
 The game loads `gmp_micro.cfg` from `gmp_bindings.cfg` at startup. The app installs both files into `Documents/garrysmod/cfg` on each launch. To change this mapping permanently, edit the bundled `resources/gmp_micro.cfg` and rebuild; the installed copy is refreshed on each launch. Keep the key assignments on the Micro and in the game identical.
 
@@ -34,13 +34,14 @@ Switch to **S** or **D**, hold Pair for one second, and pair again in iPhone Blu
 | --- | --- |
 | D-pad | Move |
 | A / B / X / Y | Jump / crouch / reload / use |
-| L / R | Previous / next weapon |
+| L / R | Hold L with D-pad to turn camera; tap L for previous weapon / R for next weapon |
 | L2 / R2 | Secondary / primary attack |
 | Minus / Plus | Spawn menu / pause menu |
-| Heart / Home + D-pad | Turn camera, if Home is reported as a separate button |
+| Heart / Home | Unbound in game; iOS may open Apple Arcade |
+| Star | No separate game input in the known S/D reports |
 
-With Heart released, the D-pad moves. Hold Heart and press D-pad left/right to turn, or up/down to look up/down. Movement from the D-pad stops while Heart is held; touch movement remains available. Camera speed can be changed in the console with `gmp_micro_look_yaw` (default 180 degrees/second) and `gmp_micro_look_pitch` (default 140 degrees/second). In K mode assign the Heart button to `C` in Ultimate Software; a firmware that does not let Home send a keyboard key cannot use this shortcut. The Heart button no longer opens the context menu.
+With the camera modifier released, the D-pad moves. In K mode, assign **Star = T** in Ultimate Software and hold Star with the D-pad to turn the camera. In S/D, hold **L + D-pad**; the Star button is used internally by the controller and does not appear as a separate button in the known SDL reports. The Heart button can launch Apple Arcade before the game receives it, so no in-game binding can suppress that system action. D-pad left/right turns, up/down looks up/down. D-pad movement stops while the modifier is held; touch movement remains available. Camera speed can be changed in the console with `gmp_micro_look_yaw` (default 180 degrees/second) and `gmp_micro_look_pitch` (default 140 degrees/second).
 
-The Star button is not assigned in S/D: the device uses it for Turbo in D mode, and the available SDL reports do not expose it as a distinct game button. In every mode, finger drag on the right half also turns the camera. The action buttons should disappear on connection; tapping a hidden button area reveals them again. The touch look/move zones work while buttons are hidden. S/D recognition and button order still need a test with the physical Micro on this iPhone.
+In every mode, finger drag on the right half also turns the camera. The action buttons should disappear on connection; tapping a hidden button area reveals them again. The touch look/move zones work while buttons are hidden. S/D recognition and button order still need a test with the physical Micro on this iPhone.
 
 Manufacturer references: [Micro compatibility and modes](https://www.8bitdo.com/micro/), [pairing manual](https://download.8bitdo.com/Manual/Controller/Micro/Micro_Manual.pdf), [D-pad and Star FAQ](https://support.8bitdo.com/faq/micro.html).
