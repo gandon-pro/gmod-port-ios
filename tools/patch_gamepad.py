@@ -1,7 +1,7 @@
-"""SDL game controllers hide action buttons; keyboard-mode Micro keeps touch controls visible.
+"""SDL controllers and all exposed Micro modes hide action buttons while touch look remains active.
 
-The 8BitDo Micro is supported on iOS as a Bluetooth keyboard, not as an MFi gamepad.
-Its D-pad and button keys are bound by resources/gmp_micro.cfg.
+K mode uses resources/gmp_micro.cfg. If iOS exposes S/D as a GCController,
+the SDL mapping and resources/gmp_micro_gamepad.cfg handle its digital buttons.
 """
 
 
@@ -22,6 +22,12 @@ def apply(root):
     # gmp_gamepad.cfg with the SDL button names. It runs once per launch and per reconnect
     # (+jlook and the axis setup are not saved in config.cfg).
     change('game/client/in_joystick.cpp',
+           '#include "cam_thirdperson.h"\n',
+           '#include "cam_thirdperson.h"\n'
+           '#if defined(SOURCE_IOS)\n'
+           'extern "C" bool GMP_MicroGamepadConnected();\n'
+           '#endif\n')
+    change('game/client/in_joystick.cpp',
            '\tstatic ConVarRef var( "joy_xcontroller_found" );\n'
            '\tif ( var.IsValid() && var.GetBool() && in_joystick.GetBool() )\n'
            '\t{\n'
@@ -40,21 +46,28 @@ def apply(root):
            '\t\tengine->ClientCmd_Unrestricted( "exec undo360controller.cfg" );\n'
            '\t\tjoy_xcontroller_cfg_loaded.SetValue( 0 );\n'
            '\t}\n',
-           '\t// GModPort: SDL controller names (gmp_gamepad.cfg), once per launch and per reconnect.\n'
+           '\t// GModPort: use the digital Micro profile when iOS exposes S/D as a game controller.\n'
            '\tstatic ConVarRef var( "joy_xcontroller_found" );\n'
            '\tstatic bool s_bGMPPadCfg = false;\n'
+           '\tstatic bool s_bGMPMicroCfg = false;\n'
+           '\tbool bGMPMicro = false;\n'
+           '#if defined(SOURCE_IOS)\n'
+           '\tbGMPMicro = GMP_MicroGamepadConnected();\n'
+           '#endif\n'
            '\tif ( var.IsValid() && var.GetBool() && in_joystick.GetBool() )\n'
            '\t{\n'
-           '\t\tif ( !s_bGMPPadCfg )\n'
+           '\t\tif ( !s_bGMPPadCfg || bGMPMicro != s_bGMPMicroCfg )\n'
            '\t\t{\n'
            '\t\t\ts_bGMPPadCfg = true;\n'
-           '\t\t\tengine->ClientCmd_Unrestricted( "exec gmp_gamepad.cfg" );\n'
+           '\t\t\ts_bGMPMicroCfg = bGMPMicro;\n'
+           '\t\t\tengine->ClientCmd_Unrestricted( bGMPMicro ? "exec gmp_micro_gamepad.cfg" : "exec gmp_gamepad.cfg" );\n'
            '\t\t\tjoy_xcontroller_cfg_loaded.SetValue( 2 );\n'
            '\t\t}\n'
            '\t}\n'
            '\telse\n'
            '\t{\n'
            '\t\ts_bGMPPadCfg = false;\n'
+           '\t\ts_bGMPMicroCfg = false;\n'
            '\t\tjoy_xcontroller_cfg_loaded.SetValue( 0 );\n'
            '\t}\n')
 
@@ -64,14 +77,15 @@ def apply(root):
            '#include "inputsystem/iinputsystem.h"\n'
            '\n'
            'extern IInputSystem *inputsystem;\n'
-           '// GModPort: only an actual SDL game controller hides action buttons.\n'
-           '// Keyboard-mode pads have no analogue look stick and need the touch surface.\n'
-           'ConVar touch_gamepad_hide( "touch_gamepad_hide", "1", FCVAR_ARCHIVE, "Hide touch buttons while a game controller is used" );\n'
+           '// GModPort: SDL controllers and keyboard-mode pads hide action buttons.\n'
+           '// Keep touch move/look active because keyboard-mode pads lack an analogue look stick.\n'
+           'extern "C" bool GMP_HardwareKeyboardConnected();\n'
+           'ConVar touch_gamepad_hide( "touch_gamepad_hide", "1", FCVAR_ARCHIVE, "Hide touch buttons while a controller or keyboard is used" );\n'
            'static bool s_bGMPTouchHidden = false;\n'
            'static bool s_bGMPHadPad = false;\n'
            'static bool s_bGMPPadInput = false;\n'
            '\n'
-           '// Called from CHLClient::IN_KeyEvent for gamepad buttons.\n'
+           '// Called from CHLClient::IN_KeyEvent for controller and keyboard buttons.\n'
            'void GMP_TouchPadInput()\n'
            '{\n'
            '\ts_bGMPPadInput = true;\n'
@@ -80,14 +94,14 @@ def apply(root):
            '\telse\n\t\tm_bCutScene = false;\n\n'
            '\tif( touch_enable.GetBool() && touch_draw.GetBool() && !enginevgui->IsGameUIVisible() ) Paint();\n',
            '\telse\n\t\tm_bCutScene = false;\n\n'
-           '\t// GModPort: hide on real controller connect/button, show on disconnect.\n'
-           '\tconst bool havePad = inputsystem && inputsystem->GetJoystickCount() > 0;\n'
+           '\t// GModPort: keyboard-mode Micro follows the same hide/show behavior as a controller.\n'
+           '\tconst bool havePad = ( inputsystem && inputsystem->GetJoystickCount() > 0 ) || GMP_HardwareKeyboardConnected();\n'
            '\tbool hide = s_bGMPTouchHidden;\n'
            '\tif( havePad != s_bGMPHadPad )\n'
            '\t{\n'
            '\t\ts_bGMPHadPad = havePad;\n'
            '\t\thide = havePad;\n'
-           '\t\tDevMsg( "Touch: game controller %s\\n", havePad ? "connected, hiding buttons" : "disconnected" );\n'
+           '\t\tDevMsg( "Touch: hardware controller or keyboard %s\\n", havePad ? "connected, hiding buttons" : "disconnected" );\n'
            '\t}\n'
            '\tif( s_bGMPPadInput )\n'
            '\t\thide = true;\n'
@@ -150,7 +164,7 @@ def apply(root):
            '\n'
            'int CHLClient::IN_KeyEvent( int eventcode, ButtonCode_t keynum, const char *pszCurrentBinding )\n'
            '{\n'
-           '\t// GModPort: a Micro in K mode sends keyboard keys; keep touch look/actions visible.\n'
-           '\tif ( eventcode && IsJoystickCode( keynum ) )\n'
+           '\t// GModPort: Micro K-mode keys hide touch buttons like controller input.\n'
+           '\tif ( eventcode && ( IsKeyCode( keynum ) || IsJoystickCode( keynum ) ) )\n'
            '\t\tGMP_TouchPadInput();\n')
     return changed

@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import <GameController/GameController.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <OpenGLES/ES3/gl.h>
 #include <SDL.h>
@@ -19,6 +20,28 @@
 
 extern "C" int LauncherMain(int argc, char** argv);
 bool InstallSourceModules();
+
+// A Micro in K mode is a hardware keyboard on iOS, not a GCController.
+// The touch layer uses this to hide action buttons as soon as it connects.
+extern "C" bool GMP_HardwareKeyboardConnected() {
+    if (@available(iOS 14.0, *))
+        return GCKeyboard.coalescedKeyboard != nil;
+    return false;
+}
+
+// SDL's iOS controller backend only sees devices exposed by GameController.
+// Identify the first active Micro so Source loads its digital D-pad bindings.
+extern "C" bool GMP_MicroGamepadConnected() {
+    if (!SDL_WasInit(SDL_INIT_GAMECONTROLLER)) return false;
+    for (int i = 0; i < SDL_NumJoysticks(); ++i) {
+        if (!SDL_IsGameController(i)) continue;
+        const char* name = SDL_GameControllerNameForIndex(i);
+        return (name && std::strstr(name, "8BitDo Micro")) ||
+               (SDL_JoystickGetDeviceVendor(i) == 0x2dc8 &&
+                SDL_JoystickGetDeviceProduct(i) == 0x9020);
+    }
+    return false;
+}
 
 static void BindIOSFramebuffer(GLenum target, GLuint framebuffer) {
     // UIKit's drawable is a nonzero FBO. Source/Android uses 0 to mean the
@@ -269,6 +292,7 @@ int main(int, char**) {
             @[resource(@"gmp_bindings.cfg"), [cfg stringByAppendingPathComponent:@"gmp_bindings.cfg"]],
             @[resource(@"gmp_gamepad.cfg"), [cfg stringByAppendingPathComponent:@"gmp_gamepad.cfg"]],
             @[resource(@"gmp_micro.cfg"), [cfg stringByAppendingPathComponent:@"gmp_micro.cfg"]],
+            @[resource(@"gmp_micro_gamepad.cfg"), [cfg stringByAppendingPathComponent:@"gmp_micro_gamepad.cfg"]],
             @[resource(@"weapon_physgun.txt"), [scripts stringByAppendingPathComponent:@"weapon_physgun.txt"]],
             @[resource(@"gmod_tool.txt"), [scripts stringByAppendingPathComponent:@"gmod_tool.txt"]],
             // GMod-style main menu (GameUI): entries and the logo panel (materials/gmp/logo in the port pack).
@@ -278,7 +302,7 @@ int main(int, char**) {
         for (NSString* name in [fm contentsOfDirectoryAtPath:touchSource error:nil])
             if ([name.pathExtension isEqualToString:@"vtf"])
                 [copies addObject:@[[touchSource stringByAppendingPathComponent:name], [touchDir stringByAppendingPathComponent:name]]];
-        if (copies.count == 9) SDL_Log("No touch textures in bundle at %s", touchSource.UTF8String);
+        if (copies.count == 10) SDL_Log("No touch textures in bundle at %s", touchSource.UTF8String);
         for (NSArray<NSString*>* copy in copies) {
             [fm removeItemAtPath:copy[1] error:nil];
             if (![fm copyItemAtPath:copy[0] toPath:copy[1] error:nil])
@@ -340,6 +364,13 @@ int main(int, char**) {
         // Game controllers come from GCController (MFi: DualSense, Xbox, Switch Pro); the CoreMotion
         // accelerometer would otherwise be listed as joystick 0.
         SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
+        // Known Micro S/D reports. These mappings are used only if iOS exposes
+        // the pad through GameController; K mode remains a hardware keyboard.
+        // Map Home to STICK1 so it stays distinct from Minus/BACK in Source.
+        SDL_SetHint(SDL_HINT_GAMECONTROLLERCONFIG,
+            "05000000ac05000004000000a8986d04,8BitDo Micro gamepad,a:b1,b:b0,back:b4,dpdown:b7,dpleft:b8,dpright:b9,dpup:b10,leftstick:b2,leftshoulder:b11,lefttrigger:b12,rightshoulder:b13,righttrigger:b14,start:b3,x:b6,y:b5,\n"
+            "05000000c82d00002090000000010000,8BitDo Micro gamepad,a:b1,b:b0,back:b10,dpdown:+a1,dpleft:-a0,dpright:+a0,dpup:-a1,leftstick:b12,leftshoulder:b6,lefttrigger:b8,rightshoulder:b7,righttrigger:b9,start:b11,x:b4,y:b3,\n"
+            "03000000c82d00002090000000000000,8BitDo Micro gamepad,a:b1,b:b0,back:b10,dpdown:+a2,dpleft:-a0,dpright:+a0,dpup:-a2,leftstick:b12,leftshoulder:b6,lefttrigger:b8,rightshoulder:b7,righttrigger:b9,start:b11,x:b4,y:b3,");
         std::vector<std::string> args={"GModPort","-basedir",documents.UTF8String,"-game","garrysmod","-novid","-insecure","-console","-condebug","-dev","2","-w",width,"-h","1080",
                                        "+touch_enable","1","+exec","gmp_bindings.cfg"};  // preserve the layout loaded by touch.cpp
         std::vector<char*> argv;
