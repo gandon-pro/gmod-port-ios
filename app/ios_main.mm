@@ -268,6 +268,7 @@ int main(int, char**) {
             @[resource(@"touch_default.cfg"), [cfg stringByAppendingPathComponent:@"touch_default.cfg"]],
             @[resource(@"gmp_bindings.cfg"), [cfg stringByAppendingPathComponent:@"gmp_bindings.cfg"]],
             @[resource(@"gmp_gamepad.cfg"), [cfg stringByAppendingPathComponent:@"gmp_gamepad.cfg"]],
+            @[resource(@"gmp_micro.cfg"), [cfg stringByAppendingPathComponent:@"gmp_micro.cfg"]],
             @[resource(@"weapon_physgun.txt"), [scripts stringByAppendingPathComponent:@"weapon_physgun.txt"]],
             @[resource(@"gmod_tool.txt"), [scripts stringByAppendingPathComponent:@"gmod_tool.txt"]],
             // GMod-style main menu (GameUI): entries and the logo panel (materials/gmp/logo in the port pack).
@@ -277,7 +278,7 @@ int main(int, char**) {
         for (NSString* name in [fm contentsOfDirectoryAtPath:touchSource error:nil])
             if ([name.pathExtension isEqualToString:@"vtf"])
                 [copies addObject:@[[touchSource stringByAppendingPathComponent:name], [touchDir stringByAppendingPathComponent:name]]];
-        if (copies.count == 8) SDL_Log("No touch textures in bundle at %s", touchSource.UTF8String);
+        if (copies.count == 9) SDL_Log("No touch textures in bundle at %s", touchSource.UTF8String);
         for (NSArray<NSString*>* copy in copies) {
             [fm removeItemAtPath:copy[1] error:nil];
             if (![fm copyItemAtPath:copy[0] toPath:copy[1] error:nil])

@@ -1,5 +1,8 @@
-"""Game controllers (SDL/MFi: DualSense, Xbox, Switch Pro) and hardware keyboards (8BitDo Micro in
-K mode) hide the touch buttons; a tap where a hidden button was brings them back."""
+"""SDL game controllers hide action buttons; keyboard-mode Micro keeps touch controls visible.
+
+The 8BitDo Micro is supported on iOS as a Bluetooth keyboard, not as an MFi gamepad.
+Its D-pad and button keys are bound by resources/gmp_micro.cfg.
+"""
 
 
 def apply(root):
@@ -61,13 +64,14 @@ def apply(root):
            '#include "inputsystem/iinputsystem.h"\n'
            '\n'
            'extern IInputSystem *inputsystem;\n'
-           '// GModPort: touch buttons hide while a game controller or hardware keyboard is used.\n'
-           'ConVar touch_gamepad_hide( "touch_gamepad_hide", "1", FCVAR_ARCHIVE, "Hide touch buttons while a gamepad or hardware keyboard is used" );\n'
+           '// GModPort: only an actual SDL game controller hides action buttons.\n'
+           '// Keyboard-mode pads have no analogue look stick and need the touch surface.\n'
+           'ConVar touch_gamepad_hide( "touch_gamepad_hide", "1", FCVAR_ARCHIVE, "Hide touch buttons while a game controller is used" );\n'
            'static bool s_bGMPTouchHidden = false;\n'
            'static bool s_bGMPHadPad = false;\n'
            'static bool s_bGMPPadInput = false;\n'
            '\n'
-           '// Called from CHLClient::IN_KeyEvent for gamepad buttons and keyboard keys.\n'
+           '// Called from CHLClient::IN_KeyEvent for gamepad buttons.\n'
            'void GMP_TouchPadInput()\n'
            '{\n'
            '\ts_bGMPPadInput = true;\n'
@@ -76,7 +80,7 @@ def apply(root):
            '\telse\n\t\tm_bCutScene = false;\n\n'
            '\tif( touch_enable.GetBool() && touch_draw.GetBool() && !enginevgui->IsGameUIVisible() ) Paint();\n',
            '\telse\n\t\tm_bCutScene = false;\n\n'
-           '\t// GModPort: hide on controller connect or any pad/key press, show on disconnect.\n'
+           '\t// GModPort: hide on real controller connect/button, show on disconnect.\n'
            '\tconst bool havePad = inputsystem && inputsystem->GetJoystickCount() > 0;\n'
            '\tbool hide = s_bGMPTouchHidden;\n'
            '\tif( havePad != s_bGMPHadPad )\n'
@@ -146,7 +150,7 @@ def apply(root):
            '\n'
            'int CHLClient::IN_KeyEvent( int eventcode, ButtonCode_t keynum, const char *pszCurrentBinding )\n'
            '{\n'
-           '\t// GModPort: a gamepad button or a hardware keyboard key (8BitDo Micro K mode) hides the touch buttons.\n'
-           '\tif ( eventcode && ( IsKeyCode( keynum ) || IsJoystickCode( keynum ) ) )\n'
+           '\t// GModPort: a Micro in K mode sends keyboard keys; keep touch look/actions visible.\n'
+           '\tif ( eventcode && IsJoystickCode( keynum ) )\n'
            '\t\tGMP_TouchPadInput();\n')
     return changed
