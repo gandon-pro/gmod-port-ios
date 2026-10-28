@@ -1,6 +1,7 @@
 // gm_construct single-player horror encounter (personal build): a minute after the map loads a
-// black citizen starts watching you from wherever you look, anywhere on the map. Five minutes
-// later it runs at you through the walls, screaming, and the game crashes. Single-player only.
+// black citizen starts watching you from a rooftop where you look, more than 25 m away; aim at it
+// or walk up and it moves to another roof. Five minutes later it runs at you through the walls
+// and up onto roofs, faster than you, no noclip, screaming, and the game crashes. Single-player only.
 #include "igamesystem.h"
 #ifndef CLIENT_DLL
 #include <cstdlib>
@@ -17,12 +18,13 @@ static ConVar gmp_construct_watcher_crash( "gmp_construct_watcher_crash", "1", 0
 // Episode content (content_hl2); the phone gets it through gmcontent/npcpack (extract_npc_content.py).
 #define GMP_WATCHER_SCREAM	"npc/stalker/stalker_scream1.wav"
 #define GMP_WATCHER_SCREAM_LEN	2.16f	// seconds: replayed back to back for the whole chase
+#define GMP_WATCHER_NEAR	1312.0f	// 25 m (1 unit = 1.905 cm): any closer and it vanishes to another roof
 
 class CGMPConstructWatcher : public CAutoGameSystemPerFrame
 {
 public:
 	EHANDLE m_hNPC;
-	float m_flAliveSince, m_flSpawned, m_flNext, m_flRelocateAt, m_flLastMove, m_flScreamAt, m_flCaughtAt, m_flGazeSince, m_flHiddenUntil;
+	float m_flAliveSince, m_flSpawned, m_flNext, m_flRelocateAt, m_flLastMove, m_flScreamAt, m_flCaughtAt, m_flGazeSince, m_flAimedAt, m_flHiddenUntil;
 	bool m_bChasing, m_bFinished;
 
 	CGMPConstructWatcher() : CAutoGameSystemPerFrame( "GMPConstructWatcher" ) { Reset(); }
@@ -30,7 +32,7 @@ public:
 	{
 		m_hNPC = NULL;
 		m_flAliveSince = m_flGazeSince = -1;
-		m_flSpawned = m_flNext = m_flRelocateAt = m_flLastMove = m_flScreamAt = m_flCaughtAt = m_flHiddenUntil = 0;
+		m_flSpawned = m_flNext = m_flRelocateAt = m_flLastMove = m_flScreamAt = m_flCaughtAt = m_flAimedAt = m_flHiddenUntil = 0;
 		m_bChasing = m_bFinished = false;
 	}
 	virtual void LevelInitPostEntity() { Reset(); }
@@ -65,25 +67,45 @@ public:
 		return sight.fraction > 0.99f;
 	}
 
-	// A floor spot where the player is looking, a little off centre so it can go unnoticed.
+	// Next to a drop of a storey or more: the edge of a roof, not a slope of the hill.
+	bool AtEdge( const Vector &spot )
+	{
+		for ( int a = 0; a < 360; a += 45 )
+		{
+			Vector dir;
+			AngleVectors( QAngle( 0, a, 0 ), &dir );
+			const Vector probe = spot + dir * 96 + Vector( 0, 0, 32 );
+			trace_t down;
+			UTIL_TraceLine( probe, probe - Vector( 0, 0, 192 ), MASK_SOLID_BRUSHONLY, NULL, COLLISION_GROUP_NONE, &down );
+			if ( !down.startsolid && down.fraction > 0.7f )	// nothing within 100 units below
+				return true;
+		}
+		return false;
+	}
+
+	// A rooftop the player is looking at, a little off centre so it can go unnoticed: the topmost
+	// surface under the sky, well above the player's feet and at a roof edge.
 	bool FindSpot( CBasePlayer *p, Vector &spot, const Vector *from = NULL )
 	{
-		for ( int i = 0; i < 32; i++ )
+		trace_t sky;
+		UTIL_TraceLine( p->EyePosition(), p->EyePosition() + Vector( 0, 0, 8192 ), MASK_SOLID_BRUSHONLY, p, COLLISION_GROUP_NONE, &sky );
+		if ( sky.DidHit() && !( sky.surface.flags & SURF_SKY ) )	// gm_construct has nothing at all above the open map
+			return false;	// indoors: no roofs in view
+		const float top = sky.endpos.z - 8;
+		for ( int i = 0; i < 64; i++ )
 		{
-			const float side = RandomFloat( 10, 32 ) * ( RandomInt( 0, 1 ) ? 1 : -1 );
+			const float side = RandomFloat( 6, 35 ) * ( RandomInt( 0, 1 ) ? 1 : -1 );
 			Vector dir;
 			AngleVectors( QAngle( 0, p->EyeAngles().y + side, 0 ), &dir );
-			trace_t ahead, floor, hull;
-			UTIL_TraceLine( p->EyePosition(), p->EyePosition() + dir * RandomFloat( 420, 900 ), MASK_SOLID_BRUSHONLY, p, COLLISION_GROUP_NONE, &ahead );
-			const Vector stand = ahead.endpos - dir * 40;
-			const float dist = ( stand - p->EyePosition() ).Length2D();
-			if ( dist < 350 || dist > 850 )	// close enough to make out, far enough to miss
-				continue;
-			UTIL_TraceLine( stand, stand - Vector( 0, 0, 512 ), MASK_SOLID_BRUSHONLY, p, COLLISION_GROUP_NONE, &floor );
-			if ( !floor.DidHit() || floor.startsolid || floor.plane.normal.z < 0.7f )
-				continue;
+			const Vector column = p->EyePosition() + dir * RandomFloat( GMP_WATCHER_NEAR + 140, GMP_WATCHER_NEAR + 1300 );
+			trace_t floor, hull;
+			UTIL_TraceLine( Vector( column.x, column.y, top ), Vector( column.x, column.y, top - 8192 ), MASK_SOLID_BRUSHONLY, p, COLLISION_GROUP_NONE, &floor );
+			if ( !floor.DidHit() || floor.startsolid || floor.plane.normal.z < 0.9f || ( floor.surface.flags & ( SURF_SKY | SURF_NODRAW ) ) )
+				continue;	// outside the map, a slope, or the sky box
 			spot = floor.endpos + Vector( 0, 0, 1 );
-			if ( from && ( spot - *from ).Length2D() < 400 )
+			if ( spot.z < p->GetAbsOrigin().z + 128 || !AtEdge( spot ) )
+				continue;
+			if ( from && SameRoof( *from, spot ) )	// never back on the roof it was seen on
 				continue;
 			// Never inside a wall or a prop: a full standing hull, world and props alike.
 			UTIL_TraceHull( spot, spot, Vector( -16, -16, 2 ), Vector( 16, 16, 72 ), MASK_NPCSOLID, p, COLLISION_GROUP_NONE, &hull );
@@ -92,6 +114,22 @@ public:
 			return true;
 		}
 		return false;
+	}
+
+	// One flat roof: same height and solid footing all the way between the two spots.
+	bool SameRoof( const Vector &a, const Vector &b )
+	{
+		if ( fabsf( a.z - b.z ) > 24 )
+			return false;
+		for ( int s = 1; s < 8; s++ )
+		{
+			const Vector probe = a + ( b - a ) * ( s / 8.0f ) + Vector( 0, 0, 16 );
+			trace_t down;
+			UTIL_TraceLine( probe, probe - Vector( 0, 0, 64 ), MASK_SOLID_BRUSHONLY, NULL, COLLISION_GROUP_NONE, &down );
+			if ( down.startsolid || !down.DidHit() )
+				return false;	// a gap or a wall between them: another roof
+		}
+		return true;
 	}
 
 	// The crosshair is on its body (the aim ray passes within its hull), with a clear line.
@@ -104,7 +142,10 @@ public:
 		if ( t <= 0 )
 			return false;
 		const Vector closest = p->EyePosition() + forward * t;
-		if ( ( closest - centre ).Length2D() > 20 || fabsf( closest.z - centre.z ) > 38 )
+		// Body size plus ~4 degrees: at 400-800 units the bare body is a fraction of a degree,
+		// too thin to hold with touch aiming (it only worked up close).
+		const float slack = t * 0.07f;
+		if ( ( closest - centre ).Length2D() > 20 + slack || fabsf( closest.z - centre.z ) > 38 + slack )
 			return false;
 		trace_t sight;
 		UTIL_TraceLine( p->EyePosition(), closest, MASK_SOLID_BRUSHONLY, p, COLLISION_GROUP_NONE, &sight );
@@ -127,14 +168,15 @@ public:
 		m_flGazeSince = -1;
 	}
 
-	// Keep its feet on the floor while it moves through walls (never sinks under the map).
-	Vector OnFloor( const Vector &pos, float lastZ )
+	// Keep its feet on the floor while it moves through walls (never sinks under the map); off a
+	// roof edge it drops at falling speed.
+	Vector OnFloor( const Vector &pos, float lastZ, float dt )
 	{
 		trace_t floor;
-		UTIL_TraceLine( pos + Vector( 0, 0, 48 ), pos - Vector( 0, 0, 96 ), MASK_SOLID_BRUSHONLY, NULL, COLLISION_GROUP_NONE, &floor );
+		UTIL_TraceLine( pos + Vector( 0, 0, 48 ), pos - Vector( 0, 0, 4096 ), MASK_SOLID_BRUSHONLY, NULL, COLLISION_GROUP_NONE, &floor );
 		if ( floor.DidHit() && !floor.startsolid && floor.plane.normal.z >= 0.7f )
-			return floor.endpos + Vector( 0, 0, 1 );
-		return Vector( pos.x, pos.y, lastZ );	// inside a wall or over a gap: hold its height
+			return Vector( pos.x, pos.y, Max( floor.endpos.z + 1, lastZ - 900 * dt ) );
+		return Vector( pos.x, pos.y, lastZ );	// inside a wall: hold its height
 	}
 
 	void Animate( CAI_BaseNPC *n, Activity act, float rate )
@@ -238,7 +280,8 @@ public:
 			if ( m_flHiddenUntil <= 0 && now >= m_flRelocateAt && !Visible( p, n->GetAbsOrigin() ) )
 			{
 				Vector spot;
-				if ( FindSpot( p, spot ) )
+				const Vector old = n->GetAbsOrigin();
+				if ( FindSpot( p, spot, &old ) )
 					n->SetAbsOrigin( spot );
 				m_flRelocateAt = now + RandomFloat( 15, 30 );
 			}
@@ -255,9 +298,18 @@ public:
 					DevMsg( "GModPort watcher: back at %.0f %.0f %.0f\n", spot.x, spot.y, spot.z );
 				}
 			}
+			else if ( ( n->GetAbsOrigin() - p->GetAbsOrigin() ).Length2D() < GMP_WATCHER_NEAR )
+			{
+				Show( n, false );	// walked up within 25 m: gone, then on another roof
+				m_flHiddenUntil = now + RandomFloat( 4, 10 );
+				DevMsg( "GModPort watcher: approached, vanished\n" );
+			}
 			else if ( !AimedAt( p, n->GetAbsOrigin() ) )
-				m_flGazeSince = -1;
-			else if ( m_flGazeSince < 0 )
+			{
+				if ( now - m_flAimedAt > 0.6f )	// brief slips off it keep the 5 s count
+					m_flGazeSince = -1;
+			}
+			else if ( ( m_flAimedAt = now ), m_flGazeSince < 0 )
 				m_flGazeSince = now;
 			else if ( now - m_flGazeSince > 5 )
 			{
@@ -286,13 +338,25 @@ public:
 			Scream( p, n );
 			m_flScreamAt = now + GMP_WATCHER_SCREAM_LEN;
 		}
-		// Straight at the player through anything, a bit faster every second.
+		// No noclip escape while it runs (console, bind or touch button alike).
+		if ( p->GetMoveType() == MOVETYPE_NOCLIP )
+			p->SetMoveType( MOVETYPE_WALK );
+		// Straight at the player through anything, always faster than the player (sprint included)
+		// and a bit faster every second.
 		Animate( n, ACT_RUN, 1.6f );
-		const Vector target = p->GetAbsOrigin();
-		Vector delta = target - n->GetAbsOrigin();
-		const float dist = VectorNormalize( delta );
-		const float speed = 420 + 40 * ( now - m_flSpawned - gmp_construct_watcher_chase.GetFloat() );
-		n->SetAbsOrigin( OnFloor( dist <= speed * dt ? target : n->GetAbsOrigin() + delta * speed * dt, n->GetAbsOrigin().z ) );
+		const Vector target = p->GetAbsOrigin(), from = n->GetAbsOrigin();
+		Vector flat( target.x - from.x, target.y - from.y, 0 );
+		const float flatDist = VectorNormalize( flat );
+		const float dist = ( target - from ).Length();
+		const float speed = Max( 500.0f, p->GetAbsVelocity().Length() * 1.3f ) + 40 * ( now - m_flSpawned - gmp_construct_watcher_chase.GetFloat() );
+		const float step = speed * dt;
+		// The player is up on a roof: climb the wall in front straight up, then run on over the top.
+		trace_t wall;
+		UTIL_TraceLine( from + Vector( 0, 0, 8 ), from + Vector( 0, 0, 8 ) + flat * 32, MASK_SOLID_BRUSHONLY, NULL, COLLISION_GROUP_NONE, &wall );
+		if ( target.z > from.z + 40 && flatDist > 24 && ( wall.startsolid || ( wall.fraction < 1 && wall.plane.normal.z < 0.7f ) ) )
+			n->SetAbsOrigin( from + Vector( 0, 0, Min( step, target.z - from.z ) ) );
+		else
+			n->SetAbsOrigin( OnFloor( flatDist <= step ? Vector( target.x, target.y, from.z ) : from + flat * step, from.z, dt ) );
 		Face( n, target );
 		if ( !m_flCaughtAt && dist < 48 )
 		{

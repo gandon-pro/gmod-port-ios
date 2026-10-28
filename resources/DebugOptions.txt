@@ -1,0 +1,82 @@
+// GModPort: pages of the engine debug menu (debugsystemui > Debug Menu > Debug Panel), installed
+// as garrysmod/scripts/DebugOptions.txt. GMod ships none, so the panel was empty.
+// "command" = button, "togglecvar" = checkbox, "incrementcvar" = "cvar min max step".
+// Server debug commands need sv_cheats 1 (Options > Debug > Debug menu turns it on).
+// npc_* without an argument use the selected NPCs or the one under the crosshair.
+"DebugOptions"
+{
+	"width"		"640"
+	"height"	"420"
+
+	"AI"
+	{
+		"Disable AI (toggle)"		{ "command" "ai_disable" }
+		"Step AI (pause)"		{ "command" "ai_step" }
+		"Resume AI"			{ "command" "ai_resume" }
+		"Show nodes"			{ "command" "ai_nodes" }
+		"Show node grid"		{ "command" "ai_show_grid" }
+		"Show connections"		{ "command" "ai_show_connect" }
+		"Show jump links"		{ "command" "ai_show_connect_jump" }
+		"Show fly links"		{ "command" "ai_show_connect_fly" }
+		"Show graph links"		{ "command" "ai_show_graph_connect" }
+		"Show hull nodes"		{ "command" "ai_show_hull" }
+		"Next hull type"		{ "command" "ai_next_hull" }
+		"Show visibility"		{ "command" "ai_show_visibility" }
+		"Show hints"			{ "command" "ai_show_hints" }
+		"Debug LOS"			{ "command" "toggle ai_debug_los" }
+		"Debug shoot pos"		{ "command" "toggle ai_debug_shoot_positions" }
+		"Debug squads"			{ "command" "toggle ai_debug_squads" }
+		"Debug enemies"			{ "command" "toggle ai_debug_enemies" }
+	}
+	"NPC"
+	{
+		"Select (crosshair)"		{ "command" "npc_select" }
+		"Nearest node"			{ "command" "npc_nearest" }
+		"Route"				{ "command" "npc_route" }
+		"Enemies"			{ "command" "npc_enemies" }
+		"Focus"				{ "command" "npc_focus" }
+		"View cone"			{ "command" "npc_viewcone" }
+		"Tasks"				{ "command" "npc_tasks" }
+		"Task text"			{ "command" "npc_task_text" }
+		"Conditions"			{ "command" "npc_conditions" }
+		"Steering"			{ "command" "npc_steering" }
+		"Relationships"			{ "command" "npc_relationships" }
+		"Squads"			{ "command" "npc_squads" }
+		"Combat"			{ "command" "npc_combat" }
+		"Freeze"			{ "command" "npc_freeze" }
+		"Go to crosshair"		{ "command" "npc_go" }
+		"Go random"			{ "command" "npc_go_random" }
+		"Reset"				{ "command" "npc_reset" }
+		"Kill"				{ "command" "npc_kill" }
+		"Destroy"			{ "command" "npc_destroy" }
+	}
+	"Entity"
+	{
+		"Text overlay"			{ "command" "ent_text" }
+		"Bounding box"			{ "command" "ent_bbox" }
+		"Abs box"			{ "command" "ent_absbox" }
+		"Render box"			{ "command" "ent_rbox" }
+		"Pivot"				{ "command" "ent_pivot" }
+		"I/O messages"			{ "command" "ent_messages" }
+	}
+	"Player"
+	{
+		"God"				{ "command" "god" }
+		"Noclip"			{ "command" "noclip" }
+		"No target"			{ "command" "notarget" }
+		"Cheats on"			{ "command" "sv_cheats 1" }
+		"Cheats off"			{ "command" "sv_cheats 0" }
+		"Timescale"			{ "incrementcvar" "host_timescale 0.25 2 0.25" }
+	}
+	"View"
+	{
+		"Fullbright"			{ "command" "toggle mat_fullbright" }
+		"Wireframe"			{ "command" "toggle mat_wireframe" }
+		"Show FPS"			{ "command" "toggle cl_showfps" }
+		"Show position"			{ "command" "toggle cl_showpos" }
+		"Net graph"			{ "command" "toggle net_graph" }
+		"Draw view model"		{ "command" "toggle r_drawviewmodel" }
+		"Draw other models"		{ "command" "toggle r_drawothermodels" }
+		"Sounds list"			{ "command" "toggle snd_show" }
+	}
+}

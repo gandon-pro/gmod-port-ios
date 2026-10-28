@@ -295,6 +295,7 @@ int main(int, char**) {
             @[resource(@"gmp_micro_gamepad.cfg"), [cfg stringByAppendingPathComponent:@"gmp_micro_gamepad.cfg"]],
             @[resource(@"weapon_physgun.txt"), [scripts stringByAppendingPathComponent:@"weapon_physgun.txt"]],
             @[resource(@"gmod_tool.txt"), [scripts stringByAppendingPathComponent:@"gmod_tool.txt"]],
+            @[resource(@"DebugOptions.txt"), [scripts stringByAppendingPathComponent:@"DebugOptions.txt"]],  // engine debug menu pages
             // GMod-style main menu (GameUI): entries and the logo panel (materials/gmp/logo in the port pack).
             @[resource(@"GameMenu.res"), [ui stringByAppendingPathComponent:@"GameMenu.res"]],
             @[resource(@"GameLogo.res"), [ui stringByAppendingPathComponent:@"GameLogo.res"]]]];
@@ -302,7 +303,7 @@ int main(int, char**) {
         for (NSString* name in [fm contentsOfDirectoryAtPath:touchSource error:nil])
             if ([name.pathExtension isEqualToString:@"vtf"])
                 [copies addObject:@[[touchSource stringByAppendingPathComponent:name], [touchDir stringByAppendingPathComponent:name]]];
-        if (copies.count == 10) SDL_Log("No touch textures in bundle at %s", touchSource.UTF8String);
+        if (copies.count == 11) SDL_Log("No touch textures in bundle at %s", touchSource.UTF8String);
         for (NSArray<NSString*>* copy in copies) {
             [fm removeItemAtPath:copy[1] error:nil];
             if (![fm copyItemAtPath:copy[0] toPath:copy[1] error:nil])
@@ -371,7 +372,7 @@ int main(int, char**) {
             "05000000ac05000004000000a8986d04,8BitDo Micro gamepad,a:b1,b:b0,back:b4,dpdown:b7,dpleft:b8,dpright:b9,dpup:b10,leftstick:b2,leftshoulder:b11,lefttrigger:b12,rightshoulder:b13,righttrigger:b14,start:b3,x:b6,y:b5,\n"
             "05000000c82d00002090000000010000,8BitDo Micro gamepad,a:b1,b:b0,back:b10,dpdown:+a1,dpleft:-a0,dpright:+a0,dpup:-a1,leftstick:b12,leftshoulder:b6,lefttrigger:b8,rightshoulder:b7,righttrigger:b9,start:b11,x:b4,y:b3,\n"
             "03000000c82d00002090000000000000,8BitDo Micro gamepad,a:b1,b:b0,back:b10,dpdown:+a2,dpleft:-a0,dpright:+a0,dpup:-a2,leftstick:b12,leftshoulder:b6,lefttrigger:b8,rightshoulder:b7,righttrigger:b9,start:b11,x:b4,y:b3,");
-        std::vector<std::string> args={"GModPort","-basedir",documents.UTF8String,"-game","garrysmod","-novid","-insecure","-console","-condebug","-dev","2","-w",width,"-h","1080",
+        std::vector<std::string> args={"GModPort","-basedir",documents.UTF8String,"-game","garrysmod","-novid","-insecure","-console","-condebug","-w",width,"-h","1080",
                                        "+touch_enable","1","+exec","gmp_bindings.cfg"};  // preserve the layout loaded by touch.cpp
         std::vector<char*> argv;
         for (auto& arg:args) argv.push_back(&arg[0]);

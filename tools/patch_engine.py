@@ -340,6 +340,17 @@ path='gameui/OptionsDialog.cpp'
 change(path, '#include "ModInfo.h"\n', '#include "ModInfo.h"\n#include "gmp_options_debug.h"	// GModPort\n')
 change(path, '\t\tAddPage(m_pOptionsSubMultiplayer, "#GameUI_Multiplayer");\n\t}\n',
        '\t\tAddPage(m_pOptionsSubMultiplayer, "#GameUI_Multiplayer");\n\t}\n\n\tAddPage(new CGMPOptionsSubDebug(this), "Debug");	// GModPort\n')
+# Engine debug menu (debugsystemui, pages from scripts/DebugOptions.txt): opened from Options > Debug,
+# so not cheat-gated, and its "Quit" item quit the game: make it "Close" (hide the menu).
+change('engine/vgui_baseui_interface.cpp', '"Show/hide the debug system UI.", FCVAR_CHEAT );',
+       '"Show/hide the debug system UI.", 0 );	// GModPort: opened from Options > Debug')
+path='engine/vgui_DebugSystemPanel.cpp'
+change(path, '\tm_pMenu->AddMenuItem( "Quit", "Quit", parent );',
+       '\tm_pMenu->AddMenuItem( "Close", "gmp_close", parent );	// GModPort: "Quit" quit the game')
+change(path, '\telse if ( !Q_strcasecmp( command, "quit" ) )',
+       '\telse if ( !Q_strcasecmp( command, "gmp_close" ) )\n\t{\n\t\tCbuf_AddText( "debugsystemui 0\\n" );\n\t\treturn;\n\t}\n\telse if ( !Q_strcasecmp( command, "quit" ) )')
+change(path, '\t\tSetPos( videomode->GetModeStereoWidth() - GetWide() - 10 , 10 );\n\t\tSetVisible( true );',
+       '\t\tSetPos( videomode->GetModeStereoWidth() - GetWide() - 10 , 10 );\n\t\tSetVisible( false );	// GModPort: so the first "Debug Panel" click shows it')
 # Saved touch profiles (touch.cfg) predate the noclip / flashlight buttons: add them when missing.
 change('game/client/touch.cpp', '\telse\n\t\tResetToDefaults();\n\n\tCTouchTexture *texture = new CTouchTexture;',
        '\telse\n\t\tResetToDefaults();\n\n'
