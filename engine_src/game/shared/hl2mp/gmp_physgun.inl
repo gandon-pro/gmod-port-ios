@@ -16,6 +16,16 @@
 #include "gmp_npc_server.inl"
 #endif
 
+// GMod sandbox: tools, constraints, entities, modifiers, duplicator / saves / vehicles.
+#include "gmp_tooldefs.inl"
+#ifndef CLIENT_DLL
+#include "gmp_gmfile.inl"
+#include "gmp_constraints.inl"
+#endif
+#include "gmp_sents.inl"
+#include "gmp_entmods.inl"
+#include "gmp_dupe.inl"
+
 #ifdef CLIENT_DLL
 #define CWeaponGMPPhysGun C_WeaponGMPPhysGun
 #endif
@@ -53,6 +63,7 @@ public:
 #ifndef CLIENT_DLL
 		m_flDistance = 0;
 		m_bWaitForRelease = false;
+		m_iGrabBone = 0;
 #endif
 	}
 
@@ -92,10 +103,12 @@ private:
 #ifndef CLIENT_DLL
 	void	Grab( CBasePlayer *pOwner );
 	void	Carry( CBasePlayer *pOwner );
+	IPhysicsObject *HeldPhys( void );
 
 	CGrabController	m_grab;
 	float			m_flDistance;
 	bool			m_bWaitForRelease;	// after a freeze, ignore +attack until it is let go
+	int				m_iGrabBone;		// held physics object (ragdoll bone; 0 for props)
 
 	DECLARE_ACTTABLE();
 #endif
@@ -220,8 +233,9 @@ void CWeaponGMPPhysGun::Release( bool bFreeze )
 	CBaseEntity *pEntity = m_grab.GetAttached();
 	if ( !pEntity )
 		return;
+	IPhysicsObject *pPhys = HeldPhys();
 	m_grab.DetachEntity( bFreeze );
-	IPhysicsObject *pPhys = pEntity->VPhysicsGetObject();
+	// Freezing a ragdoll freezes only the held bone, as in GMod.
 	if ( bFreeze && pPhys )
 		pPhys->EnableMotion( false );
 	Pickup_OnPhysGunDrop( pEntity, ToBasePlayer( GetOwner() ), DROPPED_BY_CANNON );
@@ -243,7 +257,13 @@ void CWeaponGMPPhysGun::Grab( CBasePlayer *pOwner )
 	CBaseEntity *pEntity = tr.m_pEnt;
 	if ( m_bWaitForRelease || !pEntity || pEntity->IsWorld() || pEntity->IsPlayer() || pEntity->GetMoveType() != MOVETYPE_VPHYSICS )
 		return;
-	IPhysicsObject *pPhys = pEntity->VPhysicsGetObject();
+	// Ragdolls are held by the bone that was hit (tr.physicsbone indexes the object list).
+	IPhysicsObject *pList[VPHYSICS_MAX_OBJECT_LIST_COUNT];
+	const int count = pEntity->VPhysicsGetObjectList( pList, ARRAYSIZE( pList ) );
+	if ( count <= 0 )
+		return;
+	m_iGrabBone = ( tr.physicsbone > 0 && tr.physicsbone < count ) ? tr.physicsbone : 0;
+	IPhysicsObject *pPhys = pList[m_iGrabBone];
 	if ( !pPhys )
 		return;
 
@@ -253,15 +273,17 @@ void CWeaponGMPPhysGun::Grab( CBasePlayer *pOwner )
 	m_grab.SetIgnorePitch( false );
 	m_grab.SetAngleAlignment( 0 );
 	m_grab.AttachEntity( pOwner, pEntity, pPhys, false, tr.endpos, false );
-	// Hold the object by the point that was hit, not by its center.
-	VectorITransform( tr.endpos, pEntity->EntityToWorldTransform(), m_grab.m_attachedPositionObjectSpace );
+	// Hold the object by the point that was hit, not by its center (in the held object's frame).
+	matrix3x4_t physToWorld;
+	pPhys->GetPositionMatrix( &physToWorld );
+	VectorITransform( tr.endpos, physToWorld, m_grab.m_attachedPositionObjectSpace );
 	m_flDistance = ( tr.endpos - start ).Length();
 }
 
 void CWeaponGMPPhysGun::Carry( CBasePlayer *pOwner )
 {
-	CBaseEntity *pEntity = m_grab.GetAttached();
-	if ( !pEntity || !pEntity->VPhysicsGetObject() )
+	IPhysicsObject *pPhys = HeldPhys();
+	if ( !pPhys )
 	{
 		Release( false );
 		return;
@@ -278,13 +300,26 @@ void CWeaponGMPPhysGun::Carry( CBasePlayer *pOwner )
 	VectorRotate( m_grab.m_attachedPositionObjectSpace, attachedToWorld, offset );
 	m_grab.SetTargetPosition( end - offset, angles );
 
+	matrix3x4_t physToWorld;
+	pPhys->GetPositionMatrix( &physToWorld );
 	Vector grabbed;
-	VectorTransform( m_grab.m_attachedPositionObjectSpace, pEntity->EntityToWorldTransform(), grabbed );
+	VectorTransform( m_grab.m_attachedPositionObjectSpace, physToWorld, grabbed );
 	m_vecBeamEnd = grabbed;
 }
 
+IPhysicsObject *CWeaponGMPPhysGun::HeldPhys( void )
+{
+	CBaseEntity *pEntity = m_grab.GetAttached();
+	if ( !pEntity )
+		return NULL;
+	IPhysicsObject *pList[VPHYSICS_MAX_OBJECT_LIST_COUNT];
+	const int count = pEntity->VPhysicsGetObjectList( pList, ARRAYSIZE( pList ) );
+	return m_iGrabBone < count ? pList[m_iGrabBone] : NULL;
+}
+
 // gmp_spawn <models/...mdl> [skin]: spawn a prop where you look, resting on the surface as in
-// GMod. Models without a collision model become a solid prop_dynamic instead of failing.
+// GMod. Models with a multi-solid collision model ($ragdoll) become a prop_ragdoll, as in GMod;
+// models without one become a solid prop_dynamic instead of failing.
 CON_COMMAND( gmp_spawn, "GModPort: gmp_spawn <models/...mdl> [skin] - spawn a prop where you look" )
 {
 	CBasePlayer *pPlayer = UTIL_GetCommandClient();
@@ -301,8 +336,10 @@ CON_COMMAND( gmp_spawn, "GModPort: gmp_spawn <models/...mdl> [skin] - spawn a pr
 	UTIL_TraceLine( start, start + forward * 1024, MASK_SOLID, pPlayer, COLLISION_GROUP_NONE, &tr );
 
 	const model_t *pMdl = modelinfo->GetModel( CBaseEntity::PrecacheModel( pModel ) );
-	const bool bPhysics = pMdl && modelinfo->GetVCollide( pMdl );
-	CBaseEntity *pProp = CreateEntityByName( bPhysics ? "prop_physics_override" : "prop_dynamic_override" );
+	const vcollide_t *pCollide = pMdl ? modelinfo->GetVCollide( pMdl ) : NULL;
+	const bool bPhysics = pCollide != NULL;
+	const bool bRagdoll = pCollide && pCollide->solidCount > 1;
+	CBaseEntity *pProp = CreateEntityByName( bRagdoll ? "prop_ragdoll" : bPhysics ? "prop_physics_override" : "prop_dynamic_override" );
 	if ( !pProp )
 		return;
 	pProp->KeyValue( "model", pModel );
@@ -310,7 +347,16 @@ CON_COMMAND( gmp_spawn, "GModPort: gmp_spawn <models/...mdl> [skin] - spawn a pr
 		pProp->KeyValue( "skin", args[2] );
 	if ( !bPhysics )
 		pProp->KeyValue( "solid", "2" );
-	pProp->SetAbsOrigin( tr.endpos );
+	Vector origin = tr.endpos;
+	if ( bRagdoll )
+	{
+		// The ragdoll is built from its bind pose at spawn, so lift it by the model's bounds up front.
+		Vector mins, maxs;
+		modelinfo->GetModelBounds( pMdl, mins, maxs );
+		origin -= tr.plane.normal * MIN( mins.z, 0.0f );
+		origin += tr.plane.normal * 2.0f;
+	}
+	pProp->SetAbsOrigin( origin );
 	pProp->SetAbsAngles( QAngle( 0, pPlayer->EyeAngles().y + 180, 0 ) );
 	if ( DispatchSpawn( pProp ) < 0 )
 	{
@@ -318,9 +364,12 @@ CON_COMMAND( gmp_spawn, "GModPort: gmp_spawn <models/...mdl> [skin] - spawn a pr
 		return;
 	}
 	pProp->Activate();
-	Vector origin = tr.endpos - tr.plane.normal * pProp->CollisionProp()->OBBMins().z;
-	pProp->Teleport( &origin, NULL, NULL );
-	GMP_AddUndo( pPlayer, pProp, "Prop" );
+	if ( !bRagdoll )
+	{
+		origin = tr.endpos - tr.plane.normal * pProp->CollisionProp()->OBBMins().z;
+		pProp->Teleport( &origin, NULL, NULL );
+	}
+	GMP_AddUndo( pPlayer, pProp, bRagdoll ? "Ragdoll" : "Prop" );
 	Msg( "gmp_spawn: %s at %.0f %.0f %.0f\n", pModel, origin.x, origin.y, origin.z );
 }
 
@@ -619,7 +668,8 @@ struct GMPSpawnItem
 {
 	CUtlString model;	// empty: a header row
 	CUtlString text;	// header text or the label under the icon
-	CUtlString command;	// client command run on tap
+	CUtlString command;	// client command run on tap; on a header it makes the header a button
+	CUtlString file;	// Dupes / Saves: the file the corner X deletes (with its .txt)
 	int skin;
 };
 
@@ -636,6 +686,9 @@ struct GMPSpawnList
 static CUtlVector<GMPSpawnList *> g_GMPSpawnLists;	// tree order: every list followed by its children
 static CUtlVector<GMPSpawnItem> g_GMPWeapons;
 static CUtlVector<GMPSpawnItem> g_GMPEntities;
+static CUtlVector<GMPSpawnItem> g_GMPVehicleItems;
+static CUtlVector<GMPSpawnItem> g_GMPDupeItems;
+static CUtlVector<GMPSpawnItem> g_GMPSaveItems;
 
 // Entities tab: gmp_ent <class>; a NULL class starts a header.
 static const struct { const char *cls, *name, *model; } s_GMPEntityTable[] =
@@ -818,6 +871,86 @@ static void GMP_LoadSpawnMenu( void )
 		item.command = cmd;
 		item.skin = 0;
 		g_GMPWeapons.AddToTail( item );
+	}
+
+	// Vehicles tab (gmp_dupe.inl): one header per category.
+	for ( int i = 0; i < ARRAYSIZE( s_GMPVehicles ); i++ )
+	{
+		if ( !i || Q_strcmp( s_GMPVehicles[i].category, s_GMPVehicles[i - 1].category ) )
+		{
+			header.text = s_GMPVehicles[i].category;
+			g_GMPVehicleItems.AddToTail( header );
+		}
+		GMPSpawnItem item;
+		item.model = s_GMPVehicles[i].model;
+		item.text = s_GMPVehicles[i].name;
+		char cmd[96];
+		Q_snprintf( cmd, sizeof( cmd ), "gmp_vehicle %s", s_GMPVehicles[i].name );
+		item.command = cmd;
+		item.skin = 0;
+		g_GMPVehicleItems.AddToTail( item );
+	}
+}
+
+// Dupes / Saves tabs: the files in dupes/ or saves/ (MOD path, newest first), each shown with the
+// biggest model from its .txt (GMP_DupeWriteInfo). The first row is a button that saves a new one.
+static void GMP_LoadFileItems( CUtlVector<GMPSpawnItem> &items, const char *dir, const char *ext, bool dupe )
+{
+	items.RemoveAll();
+	GMPSpawnItem button;
+	button.text = dupe ? "+ Save the Duplicator's copy" : "+ Save this map";
+	button.command = dupe ? "gm_dupe_save" : "gm_save";
+	button.skin = 0;
+	items.AddToTail( button );
+
+	struct Found { CUtlString name; long long time; };
+	CUtlVector<Found> found;
+	char path[MAX_PATH];
+	Q_snprintf( path, sizeof( path ), "%s/*.%s", dir, ext );
+	FileFindHandle_t hFind;
+	for ( const char *name = filesystem->FindFirstEx( path, "MOD", &hFind ); name; name = filesystem->FindNext( hFind ) )
+	{
+		if ( filesystem->FindIsDirectory( hFind ) )
+			continue;
+		Q_snprintf( path, sizeof( path ), "%s/%s", dir, name );
+		Found f = { name, (long long)filesystem->GetFileTime( path, "MOD" ) };
+		found.AddToTail( f );
+	}
+	filesystem->FindClose( hFind );
+	for ( int i = 1; i < found.Count(); i++ )	// newest first
+		for ( int j = i; j > 0 && found[j].time > found[j - 1].time; j-- )
+		{
+			Found t = found[j]; found[j] = found[j - 1]; found[j - 1] = t;
+		}
+
+	for ( int i = 0; i < found.Count(); i++ )
+	{
+		char base[MAX_PATH];
+		Q_StripExtension( found[i].name.Get(), base, sizeof( base ) );
+		GMPSpawnItem item;
+		item.skin = 0;
+		Q_snprintf( path, sizeof( path ), "%s/%s", dir, found[i].name.Get() );
+		item.file = path;
+		char cmd[MAX_PATH + 32];
+		if ( dupe )
+			Q_snprintf( cmd, sizeof( cmd ), "gm_dupe_open %s", path );
+		else
+			Q_snprintf( cmd, sizeof( cmd ), "gm_load %s", base );
+		item.command = cmd;
+		Q_snprintf( path, sizeof( path ), "%s/%s.txt", dir, base );
+		KeyValues *pInfo = new KeyValues( "DupeInfo" );
+		const bool info = pInfo->LoadFromFile( filesystem, path, "MOD" );
+		item.model = info ? pInfo->GetString( "model" ) : "";
+		if ( item.model.IsEmpty() )
+			item.model = "models/props_junk/wood_crate001a.mdl";	// nothing spawned: still a tappable cell
+		char label[128];
+		if ( info && !dupe )
+			Q_snprintf( label, sizeof( label ), "%s (%d)", base, pInfo->GetInt( "entities" ) );
+		else
+			Q_strncpy( label, base, sizeof( label ) );
+		item.text = label;
+		pInfo->deleteThis();
+		items.AddToTail( item );
 	}
 }
 
@@ -1026,6 +1159,14 @@ public:
 			if ( y + place.h < 0 || y > h )
 				continue;
 			const GMPSpawnItem &item = ( *m_pItems )[place.item];
+			if ( item.model.IsEmpty() && !item.command.IsEmpty() )
+			{
+				// A header that runs a command: a button (Save on the Dupes / Saves tabs).
+				vgui::surface()->DrawSetColor( 60, 140, 230, 255 );
+				vgui::surface()->DrawFilledRect( place.x, y, place.x + place.w, y + place.h );
+				DrawText( m_hHeaderFont, place.x, y, place.w, place.h, item.text.Get(), Color( 255, 255, 255, 255 ), true );
+				continue;
+			}
 			if ( item.model.IsEmpty() )
 			{
 				DrawText( m_hHeaderFont, place.x, y, place.w, place.h, item.text.Get(), Color( 60, 60, 60, 255 ), false );
@@ -1048,6 +1189,14 @@ public:
 				const int labelTall = vgui::surface()->GetFontTall( m_hFont ) * 3 / 2;
 				DrawText( m_hFont, place.x, y + place.h - labelTall, place.w, labelTall, item.text.Get(), Color( 40, 40, 40, 255 ), true );
 			}
+			if ( !item.file.IsEmpty() )
+			{
+				// Delete corner: the icon panel starts below it (UpdateCells), or it would cover it.
+				const int xs = DeleteSize( place );
+				vgui::surface()->DrawSetColor( 200, 70, 60, 255 );
+				vgui::surface()->DrawFilledRect( place.x + place.w - xs, y, place.x + place.w, y + xs );
+				DrawText( m_hFont, place.x + place.w - xs, y, xs, xs, "X", Color( 255, 255, 255, 255 ), true );
+			}
 		}
 	}
 
@@ -1067,7 +1216,13 @@ protected:
 			if ( item.command.IsEmpty() || x < place.x || x >= place.x + place.w || y < place.y || y >= place.y + place.h )
 				continue;
 			vgui::surface()->PlaySound( "ui/buttonclickrelease.wav" );
+			if ( !item.file.IsEmpty() && x >= place.x + place.w - DeleteSize( place ) && y < place.y + DeleteSize( place ) )
+			{
+				PostActionSignal( new KeyValues( "DeleteFile", "file", item.file.Get() ) );
+				return;
+			}
 			engine->ClientCmd( item.command.Get() );
+			PostActionSignal( new KeyValues( "ItemTapped" ) );
 			return;
 		}
 	}
@@ -1110,7 +1265,8 @@ private:
 			}
 			const int inset = MAX( 2, m_nGap / 2 );
 			const int labelTall = ( *m_pItems )[place.item].text.IsEmpty() ? 0 : vgui::surface()->GetFontTall( m_hFont ) * 3 / 2;
-			m_Cells[c].panel->SetBounds( place.x + inset, place.y - m_nScroll + inset, place.w - 2 * inset, place.h - 2 * inset - labelTall );
+			const int topTall = ( *m_pItems )[place.item].file.IsEmpty() ? 0 : DeleteSize( place );
+			m_Cells[c].panel->SetBounds( place.x + inset, place.y - m_nScroll + inset + topTall, place.w - 2 * inset, place.h - 2 * inset - labelTall - topTall );
 			m_Cells[c].panel->SetVisible( !place.missing );
 		}
 		for ( int c = 0; c < m_Cells.Count(); c++ )
@@ -1140,6 +1296,8 @@ private:
 		panel->LookAtMDL();
 		return true;
 	}
+
+	static int DeleteSize( const Place &place ) { return MAX( 12, place.w / 5 ); }
 
 	bool IsShown( const Place &place, int h ) const { return place.y - m_nScroll + place.h > 0 && place.y - m_nScroll < h; }
 
@@ -1194,6 +1352,8 @@ public:
 		m_pLists = new CGMPSpawnListPanel( this );
 		m_pLists->AddActionSignalTarget( this );
 		m_pGrid = new CGMPSpawnGrid( this );
+		m_pGrid->AddActionSignalTarget( this );
+		m_flRefreshAt = 0;
 		SetVisible( false );
 	}
 
@@ -1219,7 +1379,7 @@ public:
 		if ( !family || !*family )
 			family = "Verdana";
 		const int tall = ScreenHeight();
-		m_hTabFont = MakeFont( family, tall / 28, 700 );
+		m_hTabFont = MakeFont( family, tall / 34, 700 );
 		m_hListFont = MakeFont( family, tall / 34, 500 );
 		m_hHeaderFont = MakeFont( family, tall / 26, 800 );
 		m_hLabelFont = MakeFont( family, tall / 50, 500 );
@@ -1310,25 +1470,69 @@ public:
 			m_pGrid->SetItems( &g_GMPSpawnLists[index]->items );
 	}
 
+	// Dupes / Saves: the corner X deletes the file and its .txt.
+	MESSAGE_FUNC_CHARPTR( OnDeleteFile, "DeleteFile", file )
+	{
+		if ( ( Q_strnicmp( file, "dupes/", 6 ) && Q_strnicmp( file, "saves/", 6 ) ) || Q_strstr( file, ".." ) )
+			return;
+		char info[MAX_PATH];
+		Q_strncpy( info, file, sizeof( info ) );
+		Q_SetExtension( info, ".txt", sizeof( info ) );
+		filesystem->RemoveFile( file, "MOD" );
+		filesystem->RemoveFile( info, "MOD" );
+		SelectTab( m_nTab );
+	}
+
+	// The server writes the new dupe / save a frame or two after the Save tap.
+	MESSAGE_FUNC( OnItemTapped, "ItemTapped" )
+	{
+		if ( m_nTab == TAB_DUPES || m_nTab == TAB_SAVES )
+			m_flRefreshAt = Plat_FloatTime() + 0.5;
+	}
+
+	virtual void OnThink( void )
+	{
+		BaseClass::OnThink();
+		if ( m_flRefreshAt && Plat_FloatTime() >= m_flRefreshAt )
+		{
+			m_flRefreshAt = 0;
+			if ( m_nTab == TAB_DUPES || m_nTab == TAB_SAVES )
+				SelectTab( m_nTab );
+		}
+	}
+
 private:
-	static const char *const s_Tabs[4];
+	enum { TAB_SPAWNLISTS, TAB_ENTITIES, TAB_WEAPONS, TAB_NPCS, TAB_VEHICLES, TAB_DUPES, TAB_SAVES };
+	static const char *const s_Tabs[7];
 
 	void SelectTab( int tab )
 	{
 		m_nTab = tab;
-		if ( tab == 0 )
-			OnSpawnListSelected( m_pLists->Selected() );
-		else if ( tab == 3 )
-			m_pGrid->SetItems( &g_GMPNPCs );
-		else
-			m_pGrid->SetItems( tab == 1 ? &g_GMPEntities : &g_GMPWeapons );
+		switch ( tab )
+		{
+		case TAB_SPAWNLISTS: OnSpawnListSelected( m_pLists->Selected() ); break;
+		case TAB_ENTITIES: m_pGrid->SetItems( &g_GMPEntities ); break;
+		case TAB_WEAPONS: m_pGrid->SetItems( &g_GMPWeapons ); break;
+		case TAB_NPCS: m_pGrid->SetItems( &g_GMPNPCs ); break;
+		case TAB_VEHICLES: m_pGrid->SetItems( &g_GMPVehicleItems ); break;
+		case TAB_DUPES:
+			GMP_LoadFileItems( g_GMPDupeItems, "dupes", "dupe", true );
+			m_pGrid->SetItems( &g_GMPDupeItems );
+			break;
+		default:
+			GMP_LoadFileItems( g_GMPSaveItems, "saves", "gms", false );
+			m_pGrid->SetItems( &g_GMPSaveItems );
+			break;
+		}
 		InvalidateLayout();
 		Repaint();
 	}
 
 	void TabRect( int i, int &x0, int &x1 ) const
 	{
-		const int wide = ( m_nX1 - m_nX0 ) / 6, gap = m_nTabTall / 12;
+		// The tabs and Cleanup share what the close button leaves.
+		const int gap = m_nTabTall / 12, count = ARRAYSIZE( s_Tabs ) + 1;
+		const int wide = ( m_nX1 - m_nX0 - m_nTabTall * 3 / 2 - count * gap ) / count;
 		if ( i == ARRAYSIZE( s_Tabs ) )	// close button at the right end
 		{
 			x1 = m_nX1;
@@ -1356,9 +1560,10 @@ private:
 	CGMPSpawnGrid *m_pGrid;
 	vgui::HFont m_hTabFont, m_hListFont, m_hHeaderFont, m_hLabelFont;
 	int m_nTab, m_nX0, m_nX1, m_nY0, m_nY1, m_nTabTall;
+	double m_flRefreshAt;
 };
 
-const char *const CGMPSpawnMenu::s_Tabs[4] = { "Spawnlists", "Entities", "Weapons", "NPCs" };
+const char *const CGMPSpawnMenu::s_Tabs[7] = { "Spawnlists", "Entities", "Weapons", "NPCs", "Vehicles", "Dupes", "Saves" };
 
 static vgui::DHANDLE<CGMPSpawnMenu> g_hGMPSpawnMenu;
 

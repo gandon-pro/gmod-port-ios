@@ -6,9 +6,15 @@ struct GMPUndo_t
 {
 	int userid;
 	EHANDLE ent;
+	int group;	// entries of one group are undone together (a dupe paste, a thruster and its weld)
 	char name[64];
 };
 static CUtlVector<GMPUndo_t> s_GMPUndo;
+static int s_nGMPUndoGroup = 0;	// non-zero while a group is open
+static int s_nGMPUndoGroups = 0;
+
+static void GMP_UndoBeginGroup( void ) { s_nGMPUndoGroup = ++s_nGMPUndoGroups; }
+static void GMP_UndoEndGroup( void ) { s_nGMPUndoGroup = 0; }
 
 static void GMP_AddUndo( CBasePlayer *pPlayer, CBaseEntity *pEnt, const char *name )
 {
@@ -20,6 +26,7 @@ static void GMP_AddUndo( CBasePlayer *pPlayer, CBaseEntity *pEnt, const char *na
 	GMPUndo_t &entry = s_GMPUndo[s_GMPUndo.AddToTail()];
 	entry.userid = pPlayer->GetUserID();
 	entry.ent = pEnt;
+	entry.group = s_nGMPUndoGroup;
 	Q_strncpy( entry.name, name, sizeof( entry.name ) );
 }
 
@@ -35,10 +42,19 @@ CON_COMMAND( gmod_undo, "GModPort: undo the last thing you spawned" )
 		CBaseEntity *pEnt = s_GMPUndo[i].ent.Get();
 		char name[64];
 		Q_strncpy( name, s_GMPUndo[i].name, sizeof( name ) );
+		const int group = s_GMPUndo[i].group;
 		s_GMPUndo.Remove( i );
 		if ( !pEnt )
 			continue;
 		UTIL_Remove( pEnt );
+		for ( int j = s_GMPUndo.Count() - 1; group && j >= 0; j-- )
+		{
+			if ( s_GMPUndo[j].group != group )
+				continue;
+			if ( CBaseEntity *pOther = s_GMPUndo[j].ent.Get() )
+				UTIL_Remove( pOther );
+			s_GMPUndo.Remove( j );
+		}
 		ClientPrint( pPlayer, HUD_PRINTCENTER, UTIL_VarArgs( "Undone %s", name ) );
 		Msg( "gmod_undo: %s\n", name );
 		return;

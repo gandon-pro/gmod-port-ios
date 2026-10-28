@@ -594,4 +594,6 @@ from patch_npc_weapons import apply as patch_npc_weapons
 changes.extend(patch_npc_weapons(root))
 from patch_gamepad import apply as patch_gamepad
 changes.extend(patch_gamepad(root))
+from patch_gmp_sandbox import apply as patch_gmp_sandbox
+changes.extend(patch_gmp_sandbox(root))
 print(json.dumps({'engine_commit':pin,'platform_files_patched':changes,'game_code_modified':True},indent=2))

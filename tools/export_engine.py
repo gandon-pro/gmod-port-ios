@@ -108,6 +108,8 @@ def main():
                     target['defines'].append('GMP_EPISODIC_NPCS=1')
                     if folder=='game/server':
                         target['source'] += [str((engine/folder/p).resolve()) for p in NPC_SERVER_SOURCES]
+                        # GMod sandbox vehicles: the stock jeep is outside server_hl2mp.vpc.
+                        target['source'].append(str((engine/folder/'hl2/vehicle_jeep.cpp').resolve()))
                         target['includes'].append(str(engine/'game/server/episodic'))
                     target['source']=list(dict.fromkeys(target['source']))
                 result.append(target)

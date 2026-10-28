@@ -26,21 +26,31 @@ CON_COMMAND( gmp_prop, "GModPort: gmp_prop <entindex> <action> - context menu pr
 	if ( !GMP_PropTarget( pPlayer, pEnt ) )
 		return;
 	const char *action = args[2];
-	IPhysicsObject *pPhys = pEnt->GetMoveType() == MOVETYPE_VPHYSICS ? pEnt->VPhysicsGetObject() : NULL;
+	// Every physics object: a ragdoll has one per bone, and the property applies to the whole ragdoll.
+	IPhysicsObject *pList[VPHYSICS_MAX_OBJECT_LIST_COUNT];
+	const int nPhys = pEnt->GetMoveType() == MOVETYPE_VPHYSICS ? pEnt->VPhysicsGetObjectList( pList, ARRAYSIZE( pList ) ) : 0;
+	IPhysicsObject *pPhys = nPhys > 0 ? pList[0] : NULL;
 	CBaseAnimating *pAnim = pEnt->GetBaseAnimating();
 	if ( !Q_stricmp( action, "remove" ) )
 		UTIL_Remove( pEnt );
 	else if ( pPhys && ( !Q_stricmp( action, "freeze" ) || !Q_stricmp( action, "unfreeze" ) ) )
 	{
 		const bool freeze = !Q_stricmp( action, "freeze" );
-		pPhys->EnableMotion( !freeze );
-		if ( !freeze )
-			pPhys->Wake();
+		for ( int i = 0; i < nPhys; i++ )
+		{
+			pList[i]->EnableMotion( !freeze );
+			if ( !freeze )
+				pList[i]->Wake();
+		}
 	}
 	else if ( pPhys && !Q_stricmp( action, "gravity" ) )
 	{
-		pPhys->EnableGravity( !pPhys->IsGravityEnabled() );
-		pPhys->Wake();
+		const bool gravity = !pPhys->IsGravityEnabled();
+		for ( int i = 0; i < nPhys; i++ )
+		{
+			pList[i]->EnableGravity( gravity );
+			pList[i]->Wake();
+		}
 	}
 	else if ( !Q_stricmp( action, "collision" ) )
 	{
@@ -49,8 +59,8 @@ CON_COMMAND( gmp_prop, "GModPort: gmp_prop <entindex> <action> - context menu pr
 			pEnt->SetCollisionGroup( pEnt->MyNPCPointer() ? COLLISION_GROUP_NPC : COLLISION_GROUP_NONE );
 		else
 			pEnt->SetCollisionGroup( COLLISION_GROUP_DEBRIS );
-		if ( pPhys )
-			pPhys->Wake();
+		for ( int i = 0; i < nPhys; i++ )
+			pList[i]->Wake();
 	}
 	else if ( pAnim && !Q_stricmp( action, "ignite" ) )
 	{
@@ -236,17 +246,18 @@ static const GMPMenuToggle s_GMPPhysgunMenu[] = {
 	{ "Lavender", "cl_weaponcolor", "0.50 0.60 3.10" }, { "Purple", "cl_weaponcolor", "1.40 0.60 2.50" },
 	{ "Pink", "cl_weaponcolor", "1.90 0.60 1.10" },
 };
-// Tool gun (gmp_toolgun.inl): the mode and the colour tool's colour.
+// Tool gun (gmp_toolgun.inl): GMod's tool list (gmp_tooldefs.inl).
 static const GMPMenuToggle s_GMPToolsMenu[] = {
-	{ "Remover", "gmod_toolmode", "remover" }, { "Weld", "gmod_toolmode", "weld" },
-	{ "No Collide", "gmod_toolmode", "nocollide" }, { "Rope", "gmod_toolmode", "rope" },
-	{ "Colour", "gmod_toolmode", "color" },
-};
-static const GMPMenuToggle s_GMPToolColorMenu[] = {
-	{ "White", "gmod_toolcolor", "255 255 255" }, { "Red", "gmod_toolcolor", "255 40 40" },
-	{ "Orange", "gmod_toolcolor", "255 140 0" }, { "Yellow", "gmod_toolcolor", "255 230 40" },
-	{ "Green", "gmod_toolcolor", "40 220 60" }, { "Blue", "gmod_toolcolor", "40 90 255" },
-	{ "Purple", "gmod_toolcolor", "160 60 255" }, { "Black", "gmod_toolcolor", "30 30 30" },
+	{ "Axis", "gmod_toolmode", "axis" }, { "Ball Socket", "gmod_toolmode", "ballsocket" }, { "Elastic", "gmod_toolmode", "elastic" },
+	{ "Hydraulic", "gmod_toolmode", "hydraulic" }, { "Motor", "gmod_toolmode", "motor" }, { "Muscle", "gmod_toolmode", "muscle" },
+	{ "Pulley", "gmod_toolmode", "pulley" }, { "Rope", "gmod_toolmode", "rope" }, { "Slider", "gmod_toolmode", "slider" },
+	{ "Weld", "gmod_toolmode", "weld" }, { "Winch", "gmod_toolmode", "winch" }, { "Balloons", "gmod_toolmode", "balloon" },
+	{ "Button", "gmod_toolmode", "button" }, { "Duplicator", "gmod_toolmode", "duplicator" }, { "Dynamite", "gmod_toolmode", "dynamite" },
+	{ "Emitter", "gmod_toolmode", "emitter" }, { "Hoverball", "gmod_toolmode", "hoverball" }, { "Lamps", "gmod_toolmode", "lamp" },
+	{ "Light", "gmod_toolmode", "light" }, { "No Collide", "gmod_toolmode", "nocollide" }, { "Physical Properties", "gmod_toolmode", "physprop" },
+	{ "Remover", "gmod_toolmode", "remover" }, { "Thruster", "gmod_toolmode", "thruster" }, { "Wheel", "gmod_toolmode", "wheel" },
+	{ "Camera", "gmod_toolmode", "camera" }, { "Color", "gmod_toolmode", "colour" }, { "Material", "gmod_toolmode", "material" },
+	{ "Paint", "gmod_toolmode", "paint" }, { "Trails", "gmod_toolmode", "trails" },
 };
 static bool GMP_MenuItemChecked( const GMPMenuToggle &item, ConVarRef &var )
 {
@@ -266,7 +277,6 @@ static const GMPMenu s_GMPMenus[] = {
 	{ "Server", s_GMPServerMenu, ARRAYSIZE( s_GMPServerMenu ) },
 	{ "Physgun", s_GMPPhysgunMenu, ARRAYSIZE( s_GMPPhysgunMenu ) },
 	{ "Tools", s_GMPToolsMenu, ARRAYSIZE( s_GMPToolsMenu ) },
-	{ "Tool Colour", s_GMPToolColorMenu, ARRAYSIZE( s_GMPToolColorMenu ) },
 };
 
 static void GMP_DrawTextIn( vgui::HFont font, const char *text, int x0, int y0, int x1, int y1, Color color, bool center = true )
