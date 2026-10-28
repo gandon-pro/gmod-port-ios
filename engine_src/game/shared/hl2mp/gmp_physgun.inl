@@ -25,6 +25,7 @@
 #include "gmp_sents.inl"
 #include "gmp_entmods.inl"
 #include "gmp_dupe.inl"
+#include "gmp_construct_watcher.inl"
 
 #ifdef CLIENT_DLL
 #define CWeaponGMPPhysGun C_WeaponGMPPhysGun
