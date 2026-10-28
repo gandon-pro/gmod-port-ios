@@ -335,6 +335,11 @@ change('tier3/mdlutils.cpp', '''void CMDL::Draw( const matrix3x4_t& rootToWorld,
 ''')
 change('game/server/game.cpp', '#else\nConVar	flashlight( "mp_flashlight","0", FCVAR_NOTIFY );',
        '#else\nConVar	flashlight( "mp_flashlight","1", FCVAR_NOTIFY );	// GModPort: GMod has the flashlight on')
+# Options > Debug (engine_src/gameui/gmp_options_debug.h), last tab.
+path='gameui/OptionsDialog.cpp'
+change(path, '#include "ModInfo.h"\n', '#include "ModInfo.h"\n#include "gmp_options_debug.h"	// GModPort\n')
+change(path, '\t\tAddPage(m_pOptionsSubMultiplayer, "#GameUI_Multiplayer");\n\t}\n',
+       '\t\tAddPage(m_pOptionsSubMultiplayer, "#GameUI_Multiplayer");\n\t}\n\n\tAddPage(new CGMPOptionsSubDebug(this), "Debug");	// GModPort\n')
 # Saved touch profiles (touch.cfg) predate the noclip / flashlight buttons: add them when missing.
 change('game/client/touch.cpp', '\telse\n\t\tResetToDefaults();\n\n\tCTouchTexture *texture = new CTouchTexture;',
        '\telse\n\t\tResetToDefaults();\n\n'
@@ -344,6 +349,7 @@ change('game/client/touch.cpp', '\telse\n\t\tResetToDefaults();\n\n\tCTouchTextu
        '\t\t{ "flashlight", "vgui/touch/gmp_light", "impulse 100", 0.49f, 0.02f, 0.57f, 0.13f },\n'
        '\t\t{ "undo", "vgui/touch/gmp_undo", "gmod_undo", 0.29f, 0.16f, 0.37f, 0.27f },\n'
        '\t\t{ "reload", "vgui/touch/gmp_reload", "+reload", 0.72f, 0.24f, 0.82f, 0.40f },\n'
+       '\t\t{ "zoom", "vgui/touch/gmp_zoom", "+zoom", 0.49f, 0.16f, 0.57f, 0.27f },\n'
        '\t};\n'
        '\tfor ( int n = 0; n < ARRAYSIZE( s_NewButtons ); n++ )\n'
        '\t{\n'

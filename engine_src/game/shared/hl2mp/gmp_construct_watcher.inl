@@ -1,80 +1,37 @@
-// gm_construct single-player horror encounter (personal build): stand in the dark room for a minute
-// and a black citizen starts watching you from wherever you look. Five minutes later it runs at
-// you through the walls, screaming, and the game crashes. Single-player gm_construct only.
+// gm_construct single-player horror encounter (personal build): a minute after the map loads a
+// black citizen starts watching you from wherever you look, anywhere on the map. Five minutes
+// later it runs at you through the walls, screaming, and the game crashes. Single-player only.
 #include "igamesystem.h"
-#ifdef CLIENT_DLL
-static bool GMPWatcherMap()
-{
-	char map[MAX_PATH];
-	Q_FileBase( engine->GetLevelName(), map, sizeof( map ) );
-	return !Q_stricmp( map, "gm_construct" );
-}
-
-// Baked lighting at the eyes, twice a second. The server has no lighting query, so the client
-// reports it (gmp_watcher_sample). Client game systems get Update, not FrameUpdate*Think.
-class CGMPWatcherLight : public CAutoGameSystemPerFrame
-{
-	float m_flNext;
-public:
-	CGMPWatcherLight() : CAutoGameSystemPerFrame( "GMPWatcherLight" ), m_flNext( 0 ) {}
-	virtual void LevelShutdownPreEntity() { m_flNext = 0; }
-	virtual void Update( float frametime )
-	{
-		// The server decides whether this is a lone listen-server host (hl2mp runs maxplayers 2).
-		if ( !engine->IsInGame() || !GMPWatcherMap() || gpGlobals->curtime < m_flNext )
-			return;
-		m_flNext = gpGlobals->curtime + 0.5f;
-		C_BasePlayer *p = C_BasePlayer::GetLocalPlayer();
-		if ( !p )
-			return;
-		const Vector light = engine->GetLightForPoint( p->EyePosition(), true );
-		const bool dark = p->IsAlive() && light.x < 0.06f && light.y < 0.06f && light.z < 0.06f;
-		DevMsg( 2, "GModPort watcher light: %.3f %.3f %.3f\n", light.x, light.y, light.z );
-		engine->ServerCmd( dark ? "gmp_watcher_sample 1\n" : "gmp_watcher_sample 0\n" );
-	}
-};
-static CGMPWatcherLight g_GMPWatcherLight;
-#else
+#ifndef CLIENT_DLL
 #include <cstdlib>
 #include "ai_basenpc.h"
 #include "recipientfilter.h"
 
 static ConVar gmp_construct_watcher( "gmp_construct_watcher", "1", FCVAR_ARCHIVE,
 	"gm_construct watcher, including its deliberate crash ending (single player)" );
-static ConVar gmp_construct_watcher_dark( "gmp_construct_watcher_dark", "60", 0, "Seconds in the dark before the watcher appears" );
+static ConVar gmp_construct_watcher_delay( "gmp_construct_watcher_delay", "60", 0, "Seconds alive on gm_construct before the watcher appears" );
 static ConVar gmp_construct_watcher_chase( "gmp_construct_watcher_chase", "300", 0, "Seconds of watching before it runs at you" );
 static ConVar gmp_construct_watcher_crash( "gmp_construct_watcher_crash", "1", 0, "0: end the chase without crashing (testing)" );
-static ConVar gmp_construct_watcher_force( "gmp_construct_watcher_force", "0", FCVAR_CHEAT, "Ignore the light level inside the dark room (testing with its lights on)" );
-
-// gm_construct's dark room (env_soundscape "soundscape_inside_room_dark" at -4442 -1852 -136).
-// Wall/floor/ceiling planes measured with brush traces from that point on the installed map.
-static const Vector g_vecGMPDarkRoomMins( -5248, -2560, -144 );
-static const Vector g_vecGMPDarkRoomMaxs( -3248, -1056, 160 );
-
-static bool GMPInDarkRoom( const Vector &v )
-{
-	return v.x > g_vecGMPDarkRoomMins.x && v.x < g_vecGMPDarkRoomMaxs.x
-		&& v.y > g_vecGMPDarkRoomMins.y && v.y < g_vecGMPDarkRoomMaxs.y
-		&& v.z > g_vecGMPDarkRoomMins.z - 8 && v.z < g_vecGMPDarkRoomMaxs.z;
-}
 
 #define GMP_WATCHER_MODEL	"models/Humans/Group01/male_07.mdl"
-#define GMP_WATCHER_SCREAM	"ambient/voices/citizen_beaten3.wav"
+// Episode content (content_hl2); the phone gets it through gmcontent/npcpack (extract_npc_content.py).
+#define GMP_WATCHER_SCREAM	"npc/stalker/stalker_scream1.wav"
+#define GMP_WATCHER_SCREAM_LEN	2.16f	// seconds: replayed back to back for the whole chase
 
 class CGMPConstructWatcher : public CAutoGameSystemPerFrame
 {
 public:
 	EHANDLE m_hNPC;
-	float m_flDarkSince, m_flLastSample, m_flSpawned, m_flNext, m_flRelocateAt, m_flLastMove, m_flScreamAt, m_flCaughtAt;
-	bool m_bDark, m_bChasing, m_bFinished;
+	float m_flAliveSince, m_flSpawned, m_flNext, m_flRelocateAt, m_flLastMove, m_flScreamAt, m_flCaughtAt, m_flGazeSince, m_flHiddenUntil;
+	bool m_bChasing, m_bFinished;
 
 	CGMPConstructWatcher() : CAutoGameSystemPerFrame( "GMPConstructWatcher" ) { Reset(); }
 	void Reset()
 	{
 		m_hNPC = NULL;
-		m_flDarkSince = m_flLastSample = -1;
-		m_flSpawned = m_flNext = m_flRelocateAt = m_flLastMove = m_flScreamAt = m_flCaughtAt = 0;
-		m_bDark = m_bChasing = m_bFinished = false;
+		m_flAliveSince = m_flGazeSince = -1;
+		m_flSpawned = m_flNext = m_flRelocateAt = m_flLastMove = m_flScreamAt = m_flCaughtAt = m_flHiddenUntil = 0;
+		m_bChasing = m_bFinished = false;
 	}
 	virtual void LevelInitPostEntity() { Reset(); }
 	virtual void LevelShutdownPreEntity() { Reset(); }
@@ -94,28 +51,14 @@ public:
 		return players == 1 && UTIL_GetListenServerHost();
 	}
 
-	// Inside the dark room and its lights are still out (nothing else on the map counts).
-	void Sample( CBasePlayer *p, bool dark )
-	{
-		if ( !Allowed() || p != UTIL_GetListenServerHost() )
-			return;
-		const bool room = GMPInDarkRoom( p->GetAbsOrigin() );
-		m_bDark = room && ( dark || gmp_construct_watcher_force.GetBool() );
-		m_flLastSample = gpGlobals->curtime;
-		DevMsg( 2, "GModPort watcher sample: dark %d, in room %d\n", dark, room );
-		if ( !m_bDark )
-			m_flDarkSince = -1;
-		else if ( m_flDarkSince < 0 )
-			m_flDarkSince = m_flLastSample;
-	}
-
-	// In the view cone (about 45 degrees off centre) with nothing solid in between.
-	bool Visible( CBasePlayer *p, const Vector &feet )
+	// In the view cone (cone = cos of the angle off centre: 0.7 about 45 degrees, 0.94 about 20,
+	// i.e. looked at) with nothing solid in between.
+	bool Visible( CBasePlayer *p, const Vector &feet, float cone = 0.7f )
 	{
 		Vector forward, delta = feet + Vector( 0, 0, 60 ) - p->EyePosition();
 		p->EyeVectors( &forward );
 		VectorNormalize( delta );
-		if ( DotProduct( forward, delta ) < 0.7f )
+		if ( DotProduct( forward, delta ) < cone )
 			return false;
 		trace_t sight;
 		UTIL_TraceLine( p->EyePosition(), feet + Vector( 0, 0, 60 ), MASK_SOLID_BRUSHONLY, p, COLLISION_GROUP_NONE, &sight );
@@ -123,7 +66,7 @@ public:
 	}
 
 	// A floor spot where the player is looking, a little off centre so it can go unnoticed.
-	bool FindSpot( CBasePlayer *p, Vector &spot )
+	bool FindSpot( CBasePlayer *p, Vector &spot, const Vector *from = NULL )
 	{
 		for ( int i = 0; i < 32; i++ )
 		{
@@ -131,22 +74,67 @@ public:
 			Vector dir;
 			AngleVectors( QAngle( 0, p->EyeAngles().y + side, 0 ), &dir );
 			trace_t ahead, floor, hull;
-			UTIL_TraceLine( p->EyePosition(), p->EyePosition() + dir * RandomFloat( 250, 1000 ), MASK_SOLID_BRUSHONLY, p, COLLISION_GROUP_NONE, &ahead );
+			UTIL_TraceLine( p->EyePosition(), p->EyePosition() + dir * RandomFloat( 420, 900 ), MASK_SOLID_BRUSHONLY, p, COLLISION_GROUP_NONE, &ahead );
 			const Vector stand = ahead.endpos - dir * 40;
-			if ( ( stand - p->EyePosition() ).Length2D() < 160 )
+			const float dist = ( stand - p->EyePosition() ).Length2D();
+			if ( dist < 350 || dist > 850 )	// close enough to make out, far enough to miss
 				continue;
 			UTIL_TraceLine( stand, stand - Vector( 0, 0, 512 ), MASK_SOLID_BRUSHONLY, p, COLLISION_GROUP_NONE, &floor );
 			if ( !floor.DidHit() || floor.startsolid || floor.plane.normal.z < 0.7f )
 				continue;
 			spot = floor.endpos + Vector( 0, 0, 1 );
-			if ( !GMPInDarkRoom( spot ) )
+			if ( from && ( spot - *from ).Length2D() < 400 )
 				continue;
-			UTIL_TraceHull( spot, spot, Vector( -13, -13, 0 ), Vector( 13, 13, 72 ), MASK_SOLID_BRUSHONLY, p, COLLISION_GROUP_NONE, &hull );
-			if ( hull.startsolid || !Visible( p, spot ) )
+			// Never inside a wall or a prop: a full standing hull, world and props alike.
+			UTIL_TraceHull( spot, spot, Vector( -16, -16, 2 ), Vector( 16, 16, 72 ), MASK_NPCSOLID, p, COLLISION_GROUP_NONE, &hull );
+			if ( hull.startsolid || hull.allsolid || ( enginetrace->GetPointContents( spot + Vector( 0, 0, 36 ) ) & MASK_SOLID ) || !Visible( p, spot ) )
 				continue;
 			return true;
 		}
 		return false;
+	}
+
+	// The crosshair is on its body (the aim ray passes within its hull), with a clear line.
+	bool AimedAt( CBasePlayer *p, const Vector &feet )
+	{
+		Vector forward;
+		p->EyeVectors( &forward );
+		const Vector centre = feet + Vector( 0, 0, 36 );
+		const float t = DotProduct( centre - p->EyePosition(), forward );
+		if ( t <= 0 )
+			return false;
+		const Vector closest = p->EyePosition() + forward * t;
+		if ( ( closest - centre ).Length2D() > 20 || fabsf( closest.z - centre.z ) > 38 )
+			return false;
+		trace_t sight;
+		UTIL_TraceLine( p->EyePosition(), closest, MASK_SOLID_BRUSHONLY, p, COLLISION_GROUP_NONE, &sight );
+		return sight.fraction > 0.99f;
+	}
+
+	void Show( CAI_BaseNPC *n, bool show )
+	{
+		if ( show )
+		{
+			n->RemoveEffects( EF_NODRAW );
+			n->AddEffects( EF_DIMLIGHT );
+		}
+		else
+		{
+			n->AddEffects( EF_NODRAW );
+			n->RemoveEffects( EF_DIMLIGHT );
+		}
+		m_flHiddenUntil = 0;
+		m_flGazeSince = -1;
+	}
+
+	// Keep its feet on the floor while it moves through walls (never sinks under the map).
+	Vector OnFloor( const Vector &pos, float lastZ )
+	{
+		trace_t floor;
+		UTIL_TraceLine( pos + Vector( 0, 0, 48 ), pos - Vector( 0, 0, 96 ), MASK_SOLID_BRUSHONLY, NULL, COLLISION_GROUP_NONE, &floor );
+		if ( floor.DidHit() && !floor.startsolid && floor.plane.normal.z >= 0.7f )
+			return floor.endpos + Vector( 0, 0, 1 );
+		return Vector( pos.x, pos.y, lastZ );	// inside a wall or over a gap: hold its height
 	}
 
 	void Animate( CAI_BaseNPC *n, Activity act, float rate )
@@ -191,6 +179,7 @@ public:
 		n->AddSolidFlags( FSOLID_NOT_SOLID );
 		n->m_takedamage = DAMAGE_NO;
 		n->SetRenderColor( 0, 0, 0 );
+		n->AddEffects( EF_DIMLIGHT );	// a dim pool of light at its feet: a black figure in a pitch-black room is otherwise invisible
 		Face( n, p->GetAbsOrigin() );
 		Animate( n, ACT_IDLE, 1 );
 		m_hNPC = n;
@@ -227,14 +216,14 @@ public:
 		CAI_BaseNPC *n = m_hNPC ? m_hNPC->MyNPCPointer() : NULL;
 		if ( !n )
 		{
-			if ( m_flSpawned > 0 )	// removed (cleanup / remover): it may come back after another minute in the dark
+			if ( m_flSpawned > 0 )	// removed (cleanup / remover): it comes back after another delay
 				Reset();
+			if ( m_flAliveSince < 0 )
+				m_flAliveSince = now;
 			if ( now < m_flNext )
 				return;
-			m_flNext = now + 0.5f;
-			if ( m_flLastSample < 0 || now - m_flLastSample > 1.5f )
-				m_flDarkSince = -1;
-			if ( m_bDark && m_flDarkSince >= 0 && now - m_flDarkSince > gmp_construct_watcher_dark.GetFloat() )
+			m_flNext = now + 0.5f;	// no free spot in view yet: try again shortly
+			if ( now - m_flAliveSince > gmp_construct_watcher_delay.GetFloat() )
 				Spawn( p );
 			return;
 		}
@@ -246,15 +235,45 @@ public:
 		{
 			Face( n, p->GetAbsOrigin() );
 			// Look away and it is somewhere else you are looking.
-			if ( now >= m_flRelocateAt && !Visible( p, n->GetAbsOrigin() ) )
+			if ( m_flHiddenUntil <= 0 && now >= m_flRelocateAt && !Visible( p, n->GetAbsOrigin() ) )
 			{
 				Vector spot;
 				if ( FindSpot( p, spot ) )
 					n->SetAbsOrigin( spot );
 				m_flRelocateAt = now + RandomFloat( 15, 30 );
 			}
+			// Keep the crosshair on it for 5 seconds and it vanishes, to turn up somewhere else.
+			if ( m_flHiddenUntil > 0 )
+			{
+				Vector spot;
+				const Vector old = n->GetAbsOrigin();
+				if ( now >= m_flHiddenUntil && FindSpot( p, spot, &old ) )
+				{
+					n->SetAbsOrigin( spot );
+					Show( n, true );
+					m_flRelocateAt = now + RandomFloat( 15, 30 );
+					DevMsg( "GModPort watcher: back at %.0f %.0f %.0f\n", spot.x, spot.y, spot.z );
+				}
+			}
+			else if ( !AimedAt( p, n->GetAbsOrigin() ) )
+				m_flGazeSince = -1;
+			else if ( m_flGazeSince < 0 )
+				m_flGazeSince = now;
+			else if ( now - m_flGazeSince > 5 )
+			{
+				Show( n, false );
+				m_flHiddenUntil = now + RandomFloat( 4, 10 );
+				DevMsg( "GModPort watcher: aimed at, vanished\n" );
+			}
 			if ( now - m_flSpawned >= gmp_construct_watcher_chase.GetFloat() )
 			{
+				if ( m_flHiddenUntil > 0 )
+				{
+					Vector spot;
+					if ( FindSpot( p, spot ) )
+						n->SetAbsOrigin( spot );
+					Show( n, true );	// the chase starts from wherever it is
+				}
 				m_bChasing = true;
 				m_flScreamAt = now;
 				DevMsg( "GModPort watcher: chase\n" );
@@ -265,7 +284,7 @@ public:
 		if ( now >= m_flScreamAt )
 		{
 			Scream( p, n );
-			m_flScreamAt = now + 2.5f;
+			m_flScreamAt = now + GMP_WATCHER_SCREAM_LEN;
 		}
 		// Straight at the player through anything, a bit faster every second.
 		Animate( n, ACT_RUN, 1.6f );
@@ -273,7 +292,7 @@ public:
 		Vector delta = target - n->GetAbsOrigin();
 		const float dist = VectorNormalize( delta );
 		const float speed = 420 + 40 * ( now - m_flSpawned - gmp_construct_watcher_chase.GetFloat() );
-		n->SetAbsOrigin( dist <= speed * dt ? target : n->GetAbsOrigin() + delta * speed * dt );
+		n->SetAbsOrigin( OnFloor( dist <= speed * dt ? target : n->GetAbsOrigin() + delta * speed * dt, n->GetAbsOrigin().z ) );
 		Face( n, target );
 		if ( !m_flCaughtAt && dist < 48 )
 		{
@@ -290,11 +309,4 @@ public:
 	}
 };
 static CGMPConstructWatcher g_GMPConstructWatcher;
-
-CON_COMMAND( gmp_watcher_sample, "Lighting sample for the gm_construct watcher (sent by the client)" )
-{
-	CBasePlayer *p = UTIL_GetCommandClient();
-	if ( p && args.ArgC() == 2 )
-		g_GMPConstructWatcher.Sample( p, !Q_strcmp( args[1], "1" ) );
-}
 #endif
