@@ -4,12 +4,15 @@
 on client and server. Only a listen server on gm_construct with exactly one connected
 player is eligible (hl2mp runs maxplayers 2, so maxClients is not checked).
 
-## Dark detection
-The client (`Update`) samples `engine->GetLightForPoint` at the eye twice per second;
-dark = all channels < 0.06. It sends `gmp_watcher_sample 0/1` to the server, which
-also requires a non-sky ceiling above the player. Any dark indoor spot qualifies
-(the dark room near -4442 -1852 -136 measures 0.000), not a hardcoded box.
-Leaving the dark, or no samples, resets the timer.
+## Dark room only
+Only gm_construct's dark room counts (env_soundscape "soundscape_inside_room_dark"
+at -4442 -1852 -136). Its box, x -5248..-3248, y -2560..-1056, z -144..160, was measured
+with brush traces from that point on the installed map: 54 rays all hit the same planes.
+The client (`Update`) also samples `engine->GetLightForPoint` at the eye twice per
+second (dark = all channels < 0.06, 0.000 in the room) and sends `gmp_watcher_sample 0/1`.
+So the room must still be dark. Other dark spots (e.g. just outside its east wall)
+are ignored. Leaving the room or the dark resets the timer; once spawned, the
+encounter continues. The watcher's spots are always inside the room.
 
 ## Watcher
 After `gmp_construct_watcher_dark` seconds (60) of darkness, spawn
@@ -29,7 +32,7 @@ One encounter per map load.
 
 ## Convars
 `gmp_construct_watcher` (1, archived), `_dark` (60), `_chase` (300), `_crash` (1),
-`_force` (cheat, treat any indoor spot as dark). Debug output at `developer 2`.
+`_force` (cheat, ignore the light level inside the room). Debug output at `developer 2`.
 
 ## Verified (Windows dev build)
 Full cycle: dark room → spawn → chase → caught → process gone. A screenshot with

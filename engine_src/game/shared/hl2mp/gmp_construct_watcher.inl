@@ -1,4 +1,4 @@
-// gm_construct single-player horror encounter (personal build): stand in a dark room for a minute
+// gm_construct single-player horror encounter (personal build): stand in the dark room for a minute
 // and a black citizen starts watching you from wherever you look. Five minutes later it runs at
 // you through the walls, screaming, and the game crashes. Single-player gm_construct only.
 #include "igamesystem.h"
@@ -44,7 +44,19 @@ static ConVar gmp_construct_watcher( "gmp_construct_watcher", "1", FCVAR_ARCHIVE
 static ConVar gmp_construct_watcher_dark( "gmp_construct_watcher_dark", "60", 0, "Seconds in the dark before the watcher appears" );
 static ConVar gmp_construct_watcher_chase( "gmp_construct_watcher_chase", "300", 0, "Seconds of watching before it runs at you" );
 static ConVar gmp_construct_watcher_crash( "gmp_construct_watcher_crash", "1", 0, "0: end the chase without crashing (testing)" );
-static ConVar gmp_construct_watcher_force( "gmp_construct_watcher_force", "0", FCVAR_CHEAT, "Count any indoor spot as dark (testing in light)" );
+static ConVar gmp_construct_watcher_force( "gmp_construct_watcher_force", "0", FCVAR_CHEAT, "Ignore the light level inside the dark room (testing with its lights on)" );
+
+// gm_construct's dark room (env_soundscape "soundscape_inside_room_dark" at -4442 -1852 -136).
+// Wall/floor/ceiling planes measured with brush traces from that point on the installed map.
+static const Vector g_vecGMPDarkRoomMins( -5248, -2560, -144 );
+static const Vector g_vecGMPDarkRoomMaxs( -3248, -1056, 160 );
+
+static bool GMPInDarkRoom( const Vector &v )
+{
+	return v.x > g_vecGMPDarkRoomMins.x && v.x < g_vecGMPDarkRoomMaxs.x
+		&& v.y > g_vecGMPDarkRoomMins.y && v.y < g_vecGMPDarkRoomMaxs.y
+		&& v.z > g_vecGMPDarkRoomMins.z - 8 && v.z < g_vecGMPDarkRoomMaxs.z;
+}
 
 #define GMP_WATCHER_MODEL	"models/Humans/Group01/male_07.mdl"
 #define GMP_WATCHER_SCREAM	"ambient/voices/citizen_beaten3.wav"
@@ -82,16 +94,15 @@ public:
 		return players == 1 && UTIL_GetListenServerHost();
 	}
 
-	// Dark and indoors (a non-sky ceiling): the dark room, not a shadow outside.
+	// Inside the dark room and its lights are still out (nothing else on the map counts).
 	void Sample( CBasePlayer *p, bool dark )
 	{
 		if ( !Allowed() || p != UTIL_GetListenServerHost() )
 			return;
-		trace_t roof;
-		UTIL_TraceLine( p->EyePosition(), p->EyePosition() + Vector( 0, 0, 2048 ), MASK_SOLID_BRUSHONLY, p, COLLISION_GROUP_NONE, &roof );
-		m_bDark = ( dark || gmp_construct_watcher_force.GetBool() ) && roof.DidHit() && !( roof.surface.flags & SURF_SKY );
+		const bool room = GMPInDarkRoom( p->GetAbsOrigin() );
+		m_bDark = room && ( dark || gmp_construct_watcher_force.GetBool() );
 		m_flLastSample = gpGlobals->curtime;
-		DevMsg( 2, "GModPort watcher sample: %d, indoors %d\n", dark, roof.DidHit() && !( roof.surface.flags & SURF_SKY ) );
+		DevMsg( 2, "GModPort watcher sample: dark %d, in room %d\n", dark, room );
 		if ( !m_bDark )
 			m_flDarkSince = -1;
 		else if ( m_flDarkSince < 0 )
@@ -128,6 +139,8 @@ public:
 			if ( !floor.DidHit() || floor.startsolid || floor.plane.normal.z < 0.7f )
 				continue;
 			spot = floor.endpos + Vector( 0, 0, 1 );
+			if ( !GMPInDarkRoom( spot ) )
+				continue;
 			UTIL_TraceHull( spot, spot, Vector( -13, -13, 0 ), Vector( 13, 13, 72 ), MASK_SOLID_BRUSHONLY, p, COLLISION_GROUP_NONE, &hull );
 			if ( hull.startsolid || !Visible( p, spot ) )
 				continue;
