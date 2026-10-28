@@ -1,43 +1,36 @@
 # Construct watcher
 
-Included from gmp_physgun.inl on client and server. Enabled by default through
-`gmp_construct_watcher 1`; use `gmp_construct_watcher 0` to disable it.
-Only a single-player listen server on gm_construct is eligible.
+`engine_src/game/shared/hl2mp/gmp_construct_watcher.inl`, included from gmp_physgun.inl
+on client and server. Only a listen server on gm_construct with exactly one connected
+player is eligible (hl2mp runs maxplayers 2, so maxClients is not checked).
 
-The client samples baked map lighting twice per second. All three RGB channels
-must be below 0.06. The server also requires a solid non-sky ceiling overhead.
-This identifies dark indoor areas rather than a hardcoded room coordinate box;
-other sufficiently dark indoor spots on gm_construct also qualify.
-Leaving darkness, missing samples for 1.5 seconds, death, disabling the option,
-and changing maps reset the pre-spawn timer. Movement within the room is allowed.
+## Dark detection
+The client (`Update`) samples `engine->GetLightForPoint` at the eye twice per second;
+dark = all channels < 0.06. It sends `gmp_watcher_sample 0/1` to the server, which
+also requires a non-sky ceiling above the player. Any dark indoor spot qualifies
+(the dark room near -4442 -1852 -136 measures 0.000), not a hardcoded box.
+Leaving the dark, or no samples, resets the timer.
 
-After more than 60 uninterrupted seconds, arm the encounter. It stays armed
-when leaving the dark room: the player needs to be able to see outside roofs.
-Every two seconds, try up to 24 positions 1200–3200 horizontal units away,
-within +/-38 degrees of view yaw. Require an exterior horizontal brush top at
-least 128 units above the player, open sky above, an empty room under its slab,
-a clear human hull and a visible head within the full 3D view cone.
-This is geometric roof detection, not an authored list of gm_construct roofs;
-unusual solid/thick roofs may be rejected. No near-floor fallback exists.
+## Watcher
+After `gmp_construct_watcher_dark` seconds (60) of darkness, spawn
+`models/Humans/Group01/male_07.mdl` as npc_citizen: black render colour, AI off,
+not solid, invulnerable, idle, always facing the player. The spot is traced 250–1000
+units along the view yaw offset by 10–32 degrees (in view, but not under the
+crosshair), at least 160 units away, on a floor, with a clear hull and line of sight.
+Every 15–30 s, while the player is not looking at it, it moves to a new such spot.
 
-Spawn models/Humans/Group01/male_07.mdl as npc_citizen, black render colour,
-invulnerable, stationary, continuously facing the player. Every 20–40 seconds,
-when the player cannot see it, relocate to another qualifying visible rooftop
-at least 512 units from the last position. Never relocate under direct gaze.
-Relocation does not reset the five-minute timer. If no roof qualifies, retain
-the old position. This is discrete relocation, not roof-to-roof walking.
+## Chase and crash
+`gmp_construct_watcher_chase` seconds (300) after the spawn, it plays ACT_RUN and moves
+straight at the player with SetAbsOrigin (through walls), at 420 + 40/s u/s, screaming
+`ambient/voices/citizen_beaten3.wav` every 2.5 s. 0.4 s after it gets within 48 units,
+the server calls `std::abort()`. That kills the whole listen-server process (game/app)
+without saving. `gmp_construct_watcher_crash 0` removes the NPC instead.
+One encounter per map load.
 
-300 seconds after actual spawn, release the NPC and use native CHASE_ENEMY AI,
-with ambient/voices/citizen_beaten3.wav. Navigation needs the map's AI graph.
-One second after it reaches 80 units from the player, send the local ending
-command. The client deliberately calls std::abort(): this really terminates the
-process, can produce an OS crash report, and does not save the current session.
-There is no timeout crash if the NPC cannot reach the player.
-The ending command only acts in a sampled single-player gm_construct session.
+## Convars
+`gmp_construct_watcher` (1, archived), `_dark` (60), `_chase` (300), `_crash` (1),
+`_force` (cheat, treat any indoor spot as dark). Debug output at `developer 2`.
 
-Assets must be included in the phone's content package (civilian model and all
-its materials/animations plus the scream WAV). No new custom model is needed.
-
-Validation in this edit: API declarations checked against the pinned Source
-headers, inclusion through the existing engine overlay confirmed, git diff
-whitespace check. Not compiled for iOS or played on device yet. No IPA produced.
+## Verified (Windows dev build)
+Full cycle: dark room → spawn → chase → caught → process gone. A screenshot with
+mat_fullbright showed the black citizen standing, then running. Not run on iOS yet.
