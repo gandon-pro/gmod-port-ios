@@ -103,7 +103,8 @@ public:
 			if ( !floor.DidHit() || floor.startsolid || floor.plane.normal.z < 0.9f || ( floor.surface.flags & ( SURF_SKY | SURF_NODRAW ) ) )
 				continue;	// outside the map, a slope, or the sky box
 			spot = floor.endpos + Vector( 0, 0, 1 );
-			if ( spot.z < p->GetAbsOrigin().z + 128 || !AtEdge( spot ) )
+			// A building's roof, not the top of the map's boundary walls (z ~2850 on gm_construct).
+			if ( spot.z < p->GetAbsOrigin().z + 128 || spot.z > p->GetAbsOrigin().z + 1600 || !AtEdge( spot ) )
 				continue;
 			if ( from && SameRoof( *from, spot ) )	// never back on the roof it was seen on
 				continue;
@@ -116,20 +117,24 @@ public:
 		return false;
 	}
 
-	// One flat roof: same height and solid footing all the way between the two spots.
+	// One roof: the same height and either near (roofs have skylights and trenches) or roof
+	// footing under most of the line between the two spots.
 	bool SameRoof( const Vector &a, const Vector &b )
 	{
 		if ( fabsf( a.z - b.z ) > 24 )
 			return false;
-		for ( int s = 1; s < 8; s++ )
+		if ( ( a - b ).Length2D() < 1000 )
+			return true;
+		int footing = 0;
+		for ( int s = 1; s < 16; s++ )
 		{
-			const Vector probe = a + ( b - a ) * ( s / 8.0f ) + Vector( 0, 0, 16 );
+			const Vector probe = a + ( b - a ) * ( s / 16.0f ) + Vector( 0, 0, 16 );
 			trace_t down;
 			UTIL_TraceLine( probe, probe - Vector( 0, 0, 64 ), MASK_SOLID_BRUSHONLY, NULL, COLLISION_GROUP_NONE, &down );
-			if ( down.startsolid || !down.DidHit() )
-				return false;	// a gap or a wall between them: another roof
+			if ( !down.startsolid && down.DidHit() )
+				footing++;
 		}
-		return true;
+		return footing >= 12;	// a street between them leaves most probes without footing
 	}
 
 	// The crosshair is on its body (the aim ray passes within its hull), with a clear line.
@@ -328,7 +333,7 @@ public:
 				}
 				m_bChasing = true;
 				m_flScreamAt = now;
-				DevMsg( "GModPort watcher: chase\n" );
+				DevMsg( "GModPort watcher: chase from %.0f %.0f %.0f\n", n->GetAbsOrigin().x, n->GetAbsOrigin().y, n->GetAbsOrigin().z );
 			}
 			return;
 		}
@@ -361,7 +366,7 @@ public:
 		if ( !m_flCaughtAt && dist < 48 )
 		{
 			m_flCaughtAt = now;
-			DevMsg( "GModPort watcher: caught\n" );
+			DevMsg( "GModPort watcher: caught at %.0f %.0f %.0f\n", n->GetAbsOrigin().x, n->GetAbsOrigin().y, n->GetAbsOrigin().z );
 		}
 		if ( m_flCaughtAt && now - m_flCaughtAt > 0.4f )
 		{

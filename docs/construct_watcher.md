@@ -15,14 +15,14 @@ Roof search (`FindSpot`, 64 tries):
   brush above the open map);
 - a column 1452–2612 units out along the view yaw offset by 6–35 degrees is traced down
   from the sky height to the topmost surface: flat (normal z >= 0.9), not sky/nodraw;
-- at least 128 units above the player's feet and at a roof edge (`AtEdge`: some point 96
+- 128–1600 units above the player's feet (not the boundary walls, ~2850) and at a roof edge (`AtEdge`: some point 96
   units away drops more than ~100 units), so hill slopes do not count;
 - clear 32x32x72 hull, no solid at its centre, line of sight, in the view cone.
 
 `GMP_WATCHER_NEAR` = 1312 units = 25 m (1 unit = 1.905 cm). Closer than that (2D) and it
 vanishes (EF_NODRAW) for 4–10 s; so does keeping the crosshair on it for 5 s (the aim
 window is the body plus ~4 degrees). It then turns up on another roof: a spot on the same
-flat roof (`SameRoof`: height within 24 units and floor under 7 points between them) is
+flat roof (`SameRoof`: height within 24 units and either closer than 1000 units or roof footing under 12 of 15 points between them) is
 rejected. Every 15–30 s, while the player is not looking at it, it moves to another roof
 the same way. Death, cleanup or removal restarts the delay.
 
@@ -44,7 +44,7 @@ removes the NPC instead. One encounter per map load.
 (300), `_crash` (1). Debug output at `developer 2` (Options > Debug > developer messages).
 
 ## Verified (Windows dev build)
-Rooftop spawn found ~2580 units out (yaw 225 from the start area); the approach vanish
-fired. Earlier floor-spawn build: crosshair 5 s → vanished → back elsewhere, chase on the
-floor, scream, caught; crash path ends the process. Not yet observed: climbing onto a
-roof, noclip block, the same-roof rejection. Not run on iOS yet.
+Rooftop spawn ~2150–2400 units out (a black figure ~8 px tall at 720p); approach and crosshair
+vanish, back on a different roof (-809 -1997 257, 1702 -1043 1297); noclip stays off in the
+chase; chase from a roof at z 241 caught the player held on the tower roof at z 1297 (climbed).
+Earlier floor-spawn build: scream, crash path ends the process. Not run on iOS yet.
