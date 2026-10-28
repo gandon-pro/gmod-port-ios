@@ -1,4 +1,4 @@
-// gm_construct single-player horror encounter (personal build): a minute after the map loads a
+// gm_construct single-player horror encounter (personal build): after a minute in the dark room a
 // black citizen starts watching you from a rooftop where you look, more than 25 m away; aim at it
 // or walk up and it moves to another roof. Five minutes later it runs at you through the walls
 // and up onto roofs, faster than you, no noclip, screaming, and the game crashes. Single-player only.
@@ -10,7 +10,7 @@
 
 static ConVar gmp_construct_watcher( "gmp_construct_watcher", "1", FCVAR_ARCHIVE,
 	"gm_construct watcher, including its deliberate crash ending (single player)" );
-static ConVar gmp_construct_watcher_delay( "gmp_construct_watcher_delay", "60", 0, "Seconds alive on gm_construct before the watcher appears" );
+static ConVar gmp_construct_watcher_delay( "gmp_construct_watcher_delay", "60", 0, "Seconds standing in gm_construct's dark room before the watcher appears" );
 static ConVar gmp_construct_watcher_chase( "gmp_construct_watcher_chase", "300", 0, "Seconds of watching before it runs at you" );
 static ConVar gmp_construct_watcher_crash( "gmp_construct_watcher_crash", "1", 0, "0: end the chase without crashing (testing)" );
 
@@ -20,12 +20,24 @@ static ConVar gmp_construct_watcher_crash( "gmp_construct_watcher_crash", "1", 0
 #define GMP_WATCHER_SCREAM_LEN	2.16f	// seconds: replayed back to back for the whole chase
 #define GMP_WATCHER_NEAR	1312.0f	// 25 m (1 unit = 1.905 cm): any closer and it vanishes to another roof
 
+// gm_construct's dark room (env_soundscape "soundscape_inside_room_dark" at -4442 -1852 -136).
+// Wall/floor/ceiling planes measured with brush traces from that point on the installed map.
+static const Vector g_vecGMPDarkRoomMins( -5248, -2560, -144 );
+static const Vector g_vecGMPDarkRoomMaxs( -3248, -1056, 160 );
+
+static bool GMPInDarkRoom( const Vector &v )
+{
+	return v.x > g_vecGMPDarkRoomMins.x && v.x < g_vecGMPDarkRoomMaxs.x
+		&& v.y > g_vecGMPDarkRoomMins.y && v.y < g_vecGMPDarkRoomMaxs.y
+		&& v.z > g_vecGMPDarkRoomMins.z - 8 && v.z < g_vecGMPDarkRoomMaxs.z;
+}
+
 class CGMPConstructWatcher : public CAutoGameSystemPerFrame
 {
 public:
 	EHANDLE m_hNPC;
 	float m_flAliveSince, m_flSpawned, m_flNext, m_flRelocateAt, m_flLastMove, m_flScreamAt, m_flCaughtAt, m_flGazeSince, m_flAimedAt, m_flHiddenUntil;
-	bool m_bChasing, m_bFinished;
+	bool m_bArmed, m_bChasing, m_bFinished;
 
 	CGMPConstructWatcher() : CAutoGameSystemPerFrame( "GMPConstructWatcher" ) { Reset(); }
 	void Reset()
@@ -33,7 +45,7 @@ public:
 		m_hNPC = NULL;
 		m_flAliveSince = m_flGazeSince = -1;
 		m_flSpawned = m_flNext = m_flRelocateAt = m_flLastMove = m_flScreamAt = m_flCaughtAt = m_flAimedAt = m_flHiddenUntil = 0;
-		m_bChasing = m_bFinished = false;
+		m_bArmed = m_bChasing = m_bFinished = false;
 	}
 	virtual void LevelInitPostEntity() { Reset(); }
 	virtual void LevelShutdownPreEntity() { Reset(); }
@@ -265,13 +277,24 @@ public:
 		{
 			if ( m_flSpawned > 0 )	// removed (cleanup / remover): it comes back after another delay
 				Reset();
-			if ( m_flAliveSince < 0 )
-				m_flAliveSince = now;
+			// A minute without a break in the dark room arms it; leaving early starts the count over.
+			if ( !m_bArmed )
+			{
+				if ( !GMPInDarkRoom( p->GetAbsOrigin() ) )
+					m_flAliveSince = -1;
+				else if ( m_flAliveSince < 0 )
+					m_flAliveSince = now;
+				else if ( now - m_flAliveSince >= gmp_construct_watcher_delay.GetFloat() )
+				{
+					m_bArmed = true;
+					DevMsg( "GModPort watcher: armed in the dark room\n" );
+				}
+				return;
+			}
 			if ( now < m_flNext )
 				return;
-			m_flNext = now + 0.5f;	// no free spot in view yet: try again shortly
-			if ( now - m_flAliveSince > gmp_construct_watcher_delay.GetFloat() )
-				Spawn( p );
+			m_flNext = now + 0.5f;	// it shows up on a roof once the player is outside looking at one
+			Spawn( p );
 			return;
 		}
 		n->StudioFrameAdvance();

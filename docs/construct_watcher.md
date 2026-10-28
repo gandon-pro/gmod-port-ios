@@ -5,7 +5,9 @@
 player is eligible (hl2mp runs maxplayers 2, so maxClients is not checked).
 
 ## Watcher
-`gmp_construct_watcher_delay` seconds (60) after the player is alive on gm_construct,
+Arming: the player stands `gmp_construct_watcher_delay` seconds (60) without a break inside gm_construct's
+dark room (box -5248 -2560 -144 .. -3248 -1056 160, around env_soundscape "soundscape_inside_room_dark");
+leaving early restarts the count. Once armed, it appears as soon as the player is outside:
 spawn `models/Humans/Group01/male_07.mdl` as npc_citizen on a rooftop the player looks
 at: black render colour, a dim light at its feet (EF_DIMLIGHT), AI off, not solid,
 invulnerable, idle, always facing the player. If no spot is found it retries every 0.5 s.
@@ -24,7 +26,7 @@ vanishes (EF_NODRAW) for 4–10 s; so does keeping the crosshair on it for 5 s (
 window is the body plus ~4 degrees). It then turns up on another roof: a spot on the same
 flat roof (`SameRoof`: height within 24 units and either closer than 1000 units or roof footing under 12 of 15 points between them) is
 rejected. Every 15–30 s, while the player is not looking at it, it moves to another roof
-the same way. Death, cleanup or removal restarts the delay.
+the same way. Death, cleanup or removal disarms it: another minute in the dark room is needed.
 
 ## Chase and crash
 `gmp_construct_watcher_chase` seconds (300) after the spawn, it plays ACT_RUN and moves
@@ -47,4 +49,6 @@ removes the NPC instead. One encounter per map load.
 Rooftop spawn ~2150–2400 units out (a black figure ~8 px tall at 720p); approach and crosshair
 vanish, back on a different roof (-809 -1997 257, 1702 -1043 1297); noclip stays off in the
 chase; chase from a roof at z 241 caught the player held on the tower roof at z 1297 (climbed).
+Dark-room trigger (delay 5, chase 20): nothing spawned outside before the room; 2.5 s in the room did not arm;
+5 s armed; outside it spawned on a roof (-1537 -1039 241), chase 20 s later, caught.
 Earlier floor-spawn build: scream, crash path ends the process. Not run on iOS yet.
