@@ -25,3 +25,14 @@ if clang_apple not in text:
     text=text.replace(apple,clang_apple).replace(intel,clang_intel)
     file.write_text(text)
 print('fontconfig: use its existing GCC/Clang atomic backend on Apple Clang')
+file=third/'libpng/pngpriv.h'
+text=file.read_text()
+# Modern Apple SDKs expose TARGET_OS_MAC on iOS too. It does not identify
+# a classic Mac compiler with fp.h. Keep the actual legacy compiler tests;
+# Apple Clang must use the existing standard math.h branch.
+before='defined(THINK_C) || defined(__SC__) || defined(TARGET_OS_MAC)'
+after='defined(THINK_C) || defined(__SC__) /* GModPort: modern SDKs use math.h */'
+if after not in text:
+    assert text.count(before)==1, 'Unexpected libpng legacy math include guard'
+    file.write_text(text.replace(before,after))
+print('libpng: do not select classic Mac fp.h from TARGET_OS_MAC')
