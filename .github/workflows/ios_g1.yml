@@ -38,6 +38,8 @@ jobs:
           xcrun --sdk macosx --show-sdk-version
           xcrun --sdk iphoneos --show-sdk-version
           uname -m
+      - name: Test ANGLE wildcard matcher with buffer warnings enabled
+        run: python3 tools/test_angle_wildcard.py build-host/angle-wildcard
       - name: Test static module registry
         run: |
           cmake -S . -B build-host -DGMOD_BUILD_ENGINE=OFF -DCMAKE_BUILD_TYPE=Debug
@@ -81,7 +83,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build-deps/angle
-          key: angle-metal-xcode16.4-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/build_angle.sh') }}
+          key: angle-metal-xcode16.4-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/build_angle.sh', 'tools/patch_angle.py', 'tools/angle_wildcard_function.txt') }}
       - name: Build ANGLE Metal for iPhone
         if: steps.angle-cache.outputs.cache-hit != 'true'
         run: bash tools/build_angle.sh
@@ -126,4 +128,6 @@ jobs:
             build-ios/compile.log
             build-ios/generated/source-manifest.json
             build-ios/CMakeFiles/CMakeConfigureLog.yaml
+            build-angle/compile.log
+            build-angle/angle/out/ios/args.gn
           if-no-files-found: ignore

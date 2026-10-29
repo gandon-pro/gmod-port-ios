@@ -30,6 +30,7 @@ gclient sync --no-history --nohooks --revision "angle@$revision"
 DEPOT_TOOLS_DIR="$work/angle/third_party/depot_tools" bash "$work/angle/third_party/depot_tools/ensure_bootstrap"
 test -s "$work/angle/third_party/depot_tools/python3_bin_reldir.txt"
 gclient runhooks
+python3 "$root/tools/patch_angle.py" "$work/angle"
 cd angle
 mkdir -p out/ios
 cat > out/ios/args.gn <<'EOF'
@@ -48,7 +49,7 @@ angle_enable_vulkan = false
 angle_build_tests = false
 EOF
 gn gen out/ios
-ninja -C out/ios -j 3 angle_static
+ninja -C out/ios -j 3 angle_static 2>&1 | tee "$work/compile.log"
 # Flatten all object files in this dedicated angle_static build, including GN
 # source_set objects which are not included in the intermediate archives.
 find "$PWD/out/ios/obj" -name '*.o' -type f | sort > "$work/objects.txt"
