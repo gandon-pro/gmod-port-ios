@@ -40,7 +40,7 @@ bool Initialize(SDL_Window* window) {
     auto getDisplay=reinterpret_cast<PFNEGLGETPLATFORMDISPLAYEXTPROC>(eglGetProcAddress("eglGetPlatformDisplayEXT"));
     if (!getDisplay) { Fail("eglGetPlatformDisplayEXT"); Shutdown(); return false; }
     const EGLint attributes[]={EGL_PLATFORM_ANGLE_TYPE_ANGLE,EGL_PLATFORM_ANGLE_TYPE_METAL_ANGLE,EGL_NONE};
-    display=getDisplay(EGL_PLATFORM_ANGLE_ANGLE,EGL_DEFAULT_DISPLAY,attributes);
+    display=getDisplay(EGL_PLATFORM_ANGLE_ANGLE,nullptr,attributes);
     if (display==EGL_NO_DISPLAY || !eglInitialize(display,nullptr,nullptr)) { Fail("eglInitialize Metal"); Shutdown(); return false; }
     if (!eglBindAPI(EGL_OPENGL_ES_API)) { Fail("eglBindAPI"); Shutdown(); return false; }
     const EGLint configAttributes[]={EGL_SURFACE_TYPE,EGL_WINDOW_BIT|EGL_PBUFFER_BIT,EGL_RENDERABLE_TYPE,EGL_OPENGL_ES3_BIT,
