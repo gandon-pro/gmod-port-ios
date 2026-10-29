@@ -8,13 +8,22 @@ if [ ! -d "$work/depot_tools" ]; then
   git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git "$work/depot_tools"
 fi
 export PATH="$work/depot_tools:$PATH"
+# gclient can run with the host Python while gn/vpython require depot_tools'
+# bootstrapped interpreter. Disabling updates does not initialize that runtime.
+DEPOT_TOOLS_DIR="$work/depot_tools" bash "$work/depot_tools/ensure_bootstrap"
+test -s "$work/depot_tools/python3_bin_reldir.txt"
 export DEPOT_TOOLS_UPDATE=0
 cd "$work"
 cat > .gclient <<EOF
 solutions = [{"name": "angle", "url": "https://chromium.googlesource.com/angle/angle.git@$revision", "managed": False, "custom_deps": {}, "custom_vars": {}}]
 target_os = ["ios"]
 EOF
-gclient sync --no-history --revision "angle@$revision"
+gclient sync --no-history --nohooks --revision "angle@$revision"
+# ANGLE also pins its own depot_tools checkout; hooks disable its updater.
+# Bootstrap it explicitly before those hooks or GN invoke its Python wrappers.
+DEPOT_TOOLS_DIR="$work/angle/third_party/depot_tools" bash "$work/angle/third_party/depot_tools/ensure_bootstrap"
+test -s "$work/angle/third_party/depot_tools/python3_bin_reldir.txt"
+gclient runhooks
 cd angle
 mkdir -p out/ios
 cat > out/ios/args.gn <<'EOF'
