@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   engine-ios:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 360
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
@@ -29,10 +29,13 @@ jobs:
       CCACHE_MAXSIZE: 512M
     steps:
       - uses: actions/checkout@v4
+      - name: Select Xcode with macOS 15 SDK
+        run: sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
       - name: Record toolchain
         run: |
           xcode-select -p
           xcodebuild -version
+          xcrun --sdk macosx --show-sdk-version
           xcrun --sdk iphoneos --show-sdk-version
           uname -m
       - name: Test static module registry
@@ -55,14 +58,14 @@ jobs:
         id: compiled-objects
         with:
           path: .ccache
-          key: ios-g1-objects-${{ runner.arch }}-${{ hashFiles('dependencies.lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: ios-g1-objects-xcode16.4-${{ runner.arch }}-${{ hashFiles('dependencies.lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            ios-g1-objects-${{ runner.arch }}-${{ hashFiles('dependencies.lock.json') }}-
+            ios-g1-objects-xcode16.4-${{ runner.arch }}-${{ hashFiles('dependencies.lock.json') }}-
       - uses: actions/cache/restore@v4
         id: dependencies
         with:
           path: build-deps/install
-          key: ios-g1-deps-v1-${{ runner.arch }}-${{ hashFiles('dependencies.lock.json', 'tools/build_deps.sh', 'tools/patch_thirdparty.py') }}
+          key: ios-g1-deps-xcode16.4-${{ runner.arch }}-${{ hashFiles('dependencies.lock.json', 'tools/build_deps.sh', 'tools/patch_thirdparty.py') }}
       - name: Cross-compile iPhone dependencies
         id: build-dependencies
         if: steps.dependencies.outputs.cache-hit != 'true'
@@ -78,7 +81,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build-deps/angle
-          key: angle-metal-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/build_angle.sh') }}
+          key: angle-metal-xcode16.4-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/build_angle.sh') }}
       - name: Build ANGLE Metal for iPhone
         if: steps.angle-cache.outputs.cache-hit != 'true'
         run: bash tools/build_angle.sh

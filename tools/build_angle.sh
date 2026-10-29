@@ -1,5 +1,11 @@
 #!/bin/bash
 set -euo pipefail
+# Fail before fetching large dependencies when the selected Xcode is too old.
+mac_sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
+if [ "${mac_sdk_version%%.*}" -lt 15 ]; then
+  echo "ANGLE requires macOS SDK 15+; selected SDK is $mac_sdk_version ($(xcode-select -p))" >&2
+  exit 1
+fi
 root="$(cd "$(dirname "$0")/.." && pwd)"
 revision=db5eb421c4350138e291220646de7764987a07e3
 work="$root/build-angle"
