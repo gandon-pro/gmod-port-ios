@@ -73,6 +73,15 @@ jobs:
         with:
           path: build-deps/install
           key: ${{ steps.dependencies.outputs.cache-primary-key }}
+      - name: Restore ANGLE Metal libraries
+        id: angle-cache
+        uses: actions/cache@v4
+        with:
+          path: build-deps/angle
+          key: angle-metal-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/build_angle.sh') }}
+      - name: Build ANGLE Metal for iPhone
+        if: steps.angle-cache.outputs.cache-hit != 'true'
+        run: bash tools/build_angle.sh
       - name: Apply iOS platform patch
         run: python3 tools/patch_engine.py deps/engine
       - name: Configure static Source engine

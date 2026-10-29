@@ -614,3 +614,6 @@ changes.extend(patch_gamepad(root))
 from patch_gmp_sandbox import apply as patch_gmp_sandbox
 changes.extend(patch_gmp_sandbox(root))
 print(json.dumps({'engine_commit':pin,'platform_files_patched':changes,'game_code_modified':True},indent=2))
+
+# Redirect Source context lifecycle to EGL when the ANGLE build is selected.
+change("appframework/sdlmgr.cpp", '#include "SDL.h"', '#include "SDL.h"\n#include "gmp_angle_bridge.h"')

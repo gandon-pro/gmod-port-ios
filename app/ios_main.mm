@@ -2,7 +2,11 @@
 #import <UIKit/UIKit.h>
 #import <GameController/GameController.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+#if defined(GMP_USE_ANGLE)
+#include "angle/angle_metal.h"
+#else
 #import <OpenGLES/ES3/gl.h>
+#endif
 #include <SDL.h>
 #include <SDL_syswm.h>
 #include "static_modules.h"
@@ -43,6 +47,7 @@ extern "C" bool GMP_MicroGamepadConnected() {
     return false;
 }
 
+#if !defined(GMP_USE_ANGLE)
 static void BindIOSFramebuffer(GLenum target, GLuint framebuffer) {
     // UIKit's drawable is a nonzero FBO. Source/Android uses 0 to mean the
     // screen; SDL_syswm.h explicitly requires binding the UIKit framebuffer.
@@ -56,9 +61,14 @@ static void BindIOSFramebuffer(GLenum target, GLuint framebuffer) {
     glBindFramebuffer(target, framebuffer);
 }
 
+#endif
+
 // Pixel size of UIKit's color renderbuffer, the target of sdlmgr's ShowPixels blit. SDL's window
 // size is in points and its drawable size may not follow the HighDPI renderbuffer.
 void GModPort_DrawableSize(int* w, int* h) {
+#if defined(GMP_USE_ANGLE)
+    gmp_angle::DrawableSize(w,h);
+#else
     *w = *h = 0;
     SDL_SysWMinfo info{};
     SDL_VERSION(&info.version);
@@ -80,12 +90,17 @@ void GModPort_DrawableSize(int* w, int* h) {
         SDL_Log("Blit target %dx%d px (window %dx%d pt, SDL drawable %dx%d)", *w, *h, pw, ph, dw, dh);
         loggedW = *w; loggedH = *h;
     }
+#endif
 }
 
 void* GModPort_GLProcAddress(const char* name) {
+#if defined(GMP_USE_ANGLE)
+    return gmp_angle::ProcAddress(name);
+#else
     if (!std::strcmp(name, "glBindFramebuffer") || !std::strcmp(name, "glBindFramebufferEXT"))
         return reinterpret_cast<void*>(&BindIOSFramebuffer);
     return SDL_GL_GetProcAddress(name);
+#endif
 }
 
 // FileOpenDialog's desktop `open` command has no subprocess equivalent on iOS.
@@ -254,6 +269,11 @@ static void Fatal(const std::string& message) {
 
 int main(int, char**) {
     @autoreleasepool {
+#if defined(GMP_USE_ANGLE)
+        // The content-unpack progress renderer runs before Source initializes EGL.
+        SDL_SetHint(SDL_HINT_RENDER_DRIVER, "metal");
+#endif
+
         NSString* logDir = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         NSString* logPath = [logDir stringByAppendingPathComponent:@"gmodport_log.txt"];
         g_log = fopen(logPath.UTF8String, "w");
@@ -290,6 +310,7 @@ int main(int, char**) {
             @[resource(@"gameinfo.txt"), [game stringByAppendingPathComponent:@"gameinfo.txt"]],
             @[resource(@"touch_default.cfg"), [cfg stringByAppendingPathComponent:@"touch_default.cfg"]],
             @[resource(@"gmp_bindings.cfg"), [cfg stringByAppendingPathComponent:@"gmp_bindings.cfg"]],
+            @[resource(@"gmp_graphics.cfg"), [cfg stringByAppendingPathComponent:@"gmp_graphics.cfg"]],
             @[resource(@"gmp_gamepad.cfg"), [cfg stringByAppendingPathComponent:@"gmp_gamepad.cfg"]],
             @[resource(@"gmp_micro.cfg"), [cfg stringByAppendingPathComponent:@"gmp_micro.cfg"]],
             @[resource(@"gmp_micro_gamepad.cfg"), [cfg stringByAppendingPathComponent:@"gmp_micro_gamepad.cfg"]],
@@ -362,6 +383,9 @@ int main(int, char**) {
         // Touches reach the game (touch.cpp) and vgui as finger events. SDL's default touch->mouse
         // emulation would add every finger as mouse look and a MOUSE1 click (Android disables it too).
         SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+#if defined(GMP_USE_ANGLE)
+        SDL_SetHint(SDL_HINT_RENDER_DRIVER, "metal");
+#endif
         // Game controllers come from GCController (MFi: DualSense, Xbox, Switch Pro); the CoreMotion
         // accelerometer would otherwise be listed as joystick 0.
         SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
@@ -373,7 +397,7 @@ int main(int, char**) {
             "05000000c82d00002090000000010000,8BitDo Micro gamepad,a:b1,b:b0,back:b10,dpdown:+a1,dpleft:-a0,dpright:+a0,dpup:-a1,leftstick:b12,leftshoulder:b6,lefttrigger:b8,rightshoulder:b7,righttrigger:b9,start:b11,x:b4,y:b3,\n"
             "03000000c82d00002090000000000000,8BitDo Micro gamepad,a:b1,b:b0,back:b10,dpdown:+a2,dpleft:-a0,dpright:+a0,dpup:-a2,leftstick:b12,leftshoulder:b6,lefttrigger:b8,rightshoulder:b7,righttrigger:b9,start:b11,x:b4,y:b3,");
         std::vector<std::string> args={"GModPort","-basedir",documents.UTF8String,"-game","garrysmod","-novid","-insecure","-console","-condebug","-w",width,"-h","1080",
-                                       "+touch_enable","1","+exec","gmp_bindings.cfg"};  // preserve the layout loaded by touch.cpp
+                                       "+touch_enable","1","+exec","gmp_bindings.cfg","+exec","gmp_graphics.cfg"};  // preserve the layout loaded by touch.cpp
         std::vector<char*> argv;
         for (auto& arg:args) argv.push_back(&arg[0]);
         // Source resolves -game and gameinfo search paths relative to the working directory.
