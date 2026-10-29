@@ -43,13 +43,18 @@ is_component_build = false
 symbol_level = 0
 use_system_xcode = true
 use_custom_libcxx = false
+# Chromium's file-by-file unsafe-buffers audit is not a requirement for this
+# standalone ANGLE build with Apple's libc++. Keep ordinary compiler warnings.
+clang_use_unsafe_buffers_plugin = false
 ios_enable_code_signing = false
 angle_enable_metal = true
 angle_enable_gl = false
 angle_enable_vulkan = false
 angle_build_tests = false
 EOF
-gn gen out/ios
+gn gen out/ios --fail-on-unused-args
+# Record the effective setting, not just our requested args.gn value.
+gn args out/ios --list=clang_use_unsafe_buffers_plugin > "$work/unsafe-buffers-setting.txt"
 ninja -C out/ios -j 3 -k 0 angle_static 2>&1 | tee "$work/compile.log"
 # Flatten all object files in this dedicated angle_static build, including GN
 # source_set objects which are not included in the intermediate archives.

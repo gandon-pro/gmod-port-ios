@@ -130,4 +130,5 @@ jobs:
             build-ios/CMakeFiles/CMakeConfigureLog.yaml
             build-angle/compile.log
             build-angle/angle/out/ios/args.gn
+            build-angle/unsafe-buffers-setting.txt
           if-no-files-found: ignore
