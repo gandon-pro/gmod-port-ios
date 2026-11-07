@@ -1005,6 +1005,8 @@ public:
 			OnTap( m_nPressX, m_nPressY + m_nScroll );
 	}
 
+    virtual void OnMouseCaptureLost(){m_bPressed=false;m_bDragged=false;BaseClass::OnMouseCaptureLost();}
+
 	virtual void OnMouseWheeled( int delta ) { SetScroll( m_nScroll - delta * GetTall() / 6 ); }
 
 protected:
@@ -1153,6 +1155,7 @@ public:
 		GetSize( w, h );
 		vgui::surface()->DrawSetColor( 227, 227, 227, 255 );
 		vgui::surface()->DrawFilledRect( 0, 0, w, h );
+        if(!m_pItems||!m_pItems->Count())DrawText(m_hFont,4,4,w-8,MAX(30,h/10),"No items. Check your search or installed content.",Color(80,80,80,255),true);
 		for ( int i = 0; i < m_Places.Count(); i++ )
 		{
 			const Place &place = m_Places[i];
@@ -1427,7 +1430,7 @@ public:
         vgui::surface()->DrawSetTextFont(m_hTabFont);vgui::surface()->DrawSetTextColor(color);vgui::surface()->DrawSetTextPos(x+MAX(0,(w-tw)/2),y+(h-th)/2);vgui::surface()->DrawPrintText(wide,wcslen(wide));
     }
 
-    void Close(){SDL_StopTextInput();SetKeyBoardInputEnabled(false);SetVisible(false);}
+    void Close(){vgui::input()->SetMouseCapture(NULL);SDL_StopTextInput();SetKeyBoardInputEnabled(false);SetVisible(false);}
     virtual void OnKeyCodeTyped(vgui::KeyCode code){if(code==KEY_ESCAPE){Close();return;}BaseClass::OnKeyCodeTyped(code);}
     virtual void OnMousePressed(vgui::MouseCode code)
     {

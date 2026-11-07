@@ -21,7 +21,8 @@
 Работа над native GLua и HTML описана в [docs/NATIVE_GLUA_HTML.md](docs/NATIVE_GLUA_HTML.md).
 Главное меню подключено через неизменённые `mainmenu.lua`, `getmaps.lua` и HTML Facepunch.
 Проверяются callbacks, локализация и команды выбора карты; запуск на iPhone ещё требует
-проверки. Полный GLua, Q-меню и Steam/Workshop API остаются незавершёнными.
+проверки. Нативное [Q-меню](docs/QMENU.md) расширено поиском и параметрами инструментов;
+оригинальный Lua/Derma контроллер Q-меню, полный GLua и Steam/Workshop API ещё не подключены.
 
 ## Сборка G1
 

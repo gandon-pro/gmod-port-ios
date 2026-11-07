@@ -5,8 +5,8 @@ and their helper scripts through a **menu-only** binding layer. The original
 `html/menu.html`, Angular controllers, templates and CSS are loaded from installed
 game content. No HTML/CSS imitation or upstream Lua rewrite is used.
 
-This is not a complete game-realm GLua/VGUI implementation. The original Q-menu
-and Tool Gun Lua renderer remain separate unfinished work. Steam server queries,
+This is not a complete game-realm GLua/VGUI implementation. The native [Q-menu](QMENU.md) now runs the original GLua GWEN skin, but its
+original Lua/Derma controller and the Tool Gun Lua renderer remain unfinished. Steam server queries,
 Workshop, saves, dupes, demos, other gamemodes and auxiliary Lua dialogs are not
 implemented by this engine build; attempting an unavailable API reports an error.
 A visible original menu does not establish compatibility for those pages.

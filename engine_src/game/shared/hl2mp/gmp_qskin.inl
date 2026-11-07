@@ -7,7 +7,10 @@ public:
     void Shutdown(){m_VM.reset();if(m_Texture&&vgui::surface())vgui::surface()->DestroyTextureID(m_Texture);m_Texture=0;free(m_Pixels);m_Pixels=NULL;m_Attempted=m_Ready=false;}
     bool Draw(const char *slot,int x,int y,int w,int h){
         if(w<=0||h<=0)return false;
-        if(!m_Attempted)Init();if(!m_Ready)return false;
+        if(!m_Attempted)Init();if(!m_Ready){
+            int shade=!strcmp(slot,"Tree")?255:!strcmp(slot,"TabT_Inactive")?140:170;
+            vgui::surface()->DrawSetColor(shade,shade,shade,255);vgui::surface()->DrawFilledRect(x,y,x+w,y+h);return false;
+        }
         lua_State *L=m_VM->State();const int top=lua_gettop(L);
         lua_getglobal(L,"qskin");lua_getfield(L,-1,"Draw");lua_pushstring(L,slot);
         lua_pushinteger(L,x);lua_pushinteger(L,y);lua_pushinteger(L,w);lua_pushinteger(L,h);
