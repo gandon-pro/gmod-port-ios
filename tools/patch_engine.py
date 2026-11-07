@@ -487,8 +487,25 @@ change(path, '\tif( !bFoundServerBrowser && !ModInfo().IsSinglePlayerOnly() )',
 # Native Lua lifecycle; unsupported original bindings fail with a concrete Lua error.
 change('game/shared/hl2mp/weapon_physcannon.cpp', '#include "gmp_physgun.inl"',
        '#include "gmp_physgun.inl"\n#include "gmp_lua_bridge.inl"')
+change('gameui/BasePanel.cpp', '#include "tier0/memdbgon.h"',
+       '#include "gmp_lua_menu.inl"\n#include "tier0/memdbgon.h"')
+change('game/shared/hl2mp/weapon_physcannon.cpp', '#include "tier0/memdbgon.h"',
+       '#include "../gmod/glua_runtime.h"\n#include <memory>\n#include "igamesystem.h"\n#include "tier1/utlbuffer.h"\n#include "tier0/memdbgon.h"')
 change('gameui/BasePanel.cpp', 'void CBasePanel::RunFrame()\n{',
-       '#include "gmp_lua_menu.inl"\n\nvoid CBasePanel::RunFrame()\n{\n\tbool gmpMenuDialog = ( m_hOptionsDialog.Get() && m_hOptionsDialog->IsVisible() ) || GameConsole().IsConsoleVisible();\n\ts_GMPMenuLua.Tick( IsVisible() && !gmpMenuDialog );')
+       'void CBasePanel::RunFrame()\n{\n\tbool gmpMenuDialog = ( m_hOptionsDialog.Get() && m_hOptionsDialog->IsVisible() ) || GameConsole().IsConsoleVisible();\n\ts_GMPMenuLua.Tick( IsVisible() && !gmpMenuDialog );')
+
+change('gameui/BasePanel.cpp', '\t// Check to see if a pending async task has already finished',
+       '\t// Original HTML owns main-menu input and appearance after its controller is ready.\n'
+       '\tstatic bool gmpWasOriginalMenu = false;\n'
+       '\tbool gmpOriginalMenu = s_GMPMenuLua.DocumentReady();\n'
+       '\tif ( gmpOriginalMenu || gmpWasOriginalMenu )\n'
+       '\t{\n'
+       '\t\tm_pGameMenu->SetVisible( !gmpOriginalMenu );\n'
+       '\t\tif ( m_pGameLogo ) m_pGameLogo->SetVisible( !gmpOriginalMenu );\n'
+       '\t\tfor ( int i = 0; i < m_pGameMenuButtons.Count(); ++i ) m_pGameMenuButtons[i]->SetVisible( !gmpOriginalMenu );\n'
+       '\t}\n'
+       '\tgmpWasOriginalMenu = gmpOriginalMenu;\n'
+       '\t// Check to see if a pending async task has already finished')
 
 change('gameui/GameUI_Interface.cpp', 'void CGameUI::Shutdown()\n{',
        'extern void GMP_ShutdownMenuLua();\nvoid CGameUI::Shutdown()\n{\n\tGMP_ShutdownMenuLua();')

@@ -2,6 +2,7 @@
 #import <WebKit/WebKit.h>
 #import <ImageIO/ImageIO.h>
 #include "html_panel.h"
+#include "bridge_script.h"
 #include <atomic>
 #include <cmath>
 #include <cstring>
@@ -66,7 +67,8 @@ static UIView *HostView(){
     NSDictionary *types=@{@"html":@"text/html",@"css":@"text/css",@"js":@"application/javascript",@"json":@"application/json",@"png":@"image/png",@"jpg":@"image/jpeg",@"jpeg":@"image/jpeg",@"svg":@"image/svg+xml",@"woff":@"font/woff",@"woff2":@"font/woff2",@"ttf":@"font/ttf"};
     NSString *mime=types[path.pathExtension.lowercaseString]?:@"application/octet-stream";
     NSData *data=[NSData dataWithBytesNoCopy:bytes length:count freeWhenDone:YES];
-    [task didReceiveResponse:[[NSURLResponse alloc] initWithURL:url MIMEType:mime expectedContentLength:count textEncodingName:nil]];
+    NSDictionary *headers=@{@"Content-Type":[mime hasPrefix:@"text/"]?[mime stringByAppendingString:@"; charset=utf-8"]:mime,@"Access-Control-Allow-Origin":@"*"};
+    [task didReceiveResponse:[[NSHTTPURLResponse alloc] initWithURL:url statusCode:200 HTTPVersion:@"HTTP/1.1" headerFields:headers]];
     [task didReceiveData:data];[task didFinish];
 }
 - (void)webView:(WKWebView *)webView stopURLSchemeTask:(id<WKURLSchemeTask>)task { /* Requests are completed synchronously. */ }
@@ -91,7 +93,7 @@ extern "C" uint64_t GMPHTML_Create(const char *address){
         [config.userContentController addScriptMessageHandler:proxy name:@"gmp"];
         panel.view=[[WKWebView alloc] initWithFrame:host.bounds configuration:config];panel.view.navigationDelegate=proxy;panel.view.customUserAgent=@"Valve Source Client GModPort iOS WebKit";
         panel.view.scrollView.bounces=NO;
-        NSString *bootstrap=@"window.__gmpCallbacks={};window.__gmpSequence=1;window.__gmpComplete=function(id,args){var fn=window.__gmpCallbacks[id];delete window.__gmpCallbacks[id];if(fn)fn.apply(null,args);};window.addEventListener(\"load\",function(){window.webkit.messageHandlers.gmp.postMessage({name:\"_gmp.Ready\",args:[]});});window.addEventListener(\"error\",function(e){var target=e.target;window.webkit.messageHandlers.gmp.postMessage({name:e.message?\"_gmp.Error\":\"_gmp.ResourceError\",args:[e.message||target.src||target.href||\"Resource failure\"]});},true);";
+        NSString *bootstrap=[NSString stringWithUTF8String:kGMPHTMLBridge];
         [config.userContentController addUserScript:[[WKUserScript alloc] initWithSource:bootstrap injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES]];
         panel.view.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight;panel.view.opaque=NO;panel.view.backgroundColor=UIColor.clearColor;
         panel.view.hidden=YES;panels[@(token)]=panel;[host addSubview:panel.view];
@@ -123,7 +125,7 @@ extern "C" void GMPHTML_Call(uint64_t token,const char *code){NSString *js=[NSSt
 extern "C" void GMPHTML_AddFunction(uint64_t token,const char *object,const char *function){
     NSString *obj=[NSString stringWithUTF8String:object?object:""];NSString *fn=[NSString stringWithUTF8String:function?function:""];if(!obj.length||!fn.length)return;
     dispatch_async(dispatch_get_main_queue(),^{GMPHTMLPanel *p=panels[@(token)];if(!p)return;NSString *name=[NSString stringWithFormat:@"%@.%@",obj,fn];[p.functions addObject:name];
-        NSString *js=[NSString stringWithFormat:@"window[%@]=window[%@]||{};window[%@][%@]=function(){var args=Array.from(arguments),request=null;if(typeof args[args.length-1]===\"function\"){request=window.__gmpSequence++;window.__gmpCallbacks[request]=args.pop();}window.webkit.messageHandlers.gmp.postMessage({name:%@,args:args,request:request});};",JSONString(obj),JSONString(obj),JSONString(obj),JSONString(fn),JSONString(name)];
+        NSString *js=[NSString stringWithFormat:@"window.__gmpRegister(%@,%@);",JSONString(obj),JSONString(fn)];
         WKUserScript *script=[[WKUserScript alloc] initWithSource:js injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES];[p.view.configuration.userContentController addUserScript:script];
         [p.view evaluateJavaScript:js completionHandler:nil];
     });
@@ -140,7 +142,7 @@ extern "C" void GMPHTML_Reply(uint64_t token,uint64_t request,const char *json){
 }
 extern "C" void GMPHTML_Viewport(uint64_t token,int width,int height){
     if(width<1||height<1)return;
-    NSString *js=[NSString stringWithFormat:@"(function(){var m=document.querySelector('meta[name=viewport]');if(!m){m=document.createElement('meta');m.name='viewport';document.head.appendChild(m);}m.content='width=%d,user-scalable=no';})();",width];
+    NSString *js=[NSString stringWithFormat:@"window.__gmpViewport(%d)",width];
     dispatch_async(dispatch_get_main_queue(),^{GMPHTMLPanel *p=panels[@(token)];if(!p)return;
         [p.view.configuration.userContentController addUserScript:[[WKUserScript alloc] initWithSource:js injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:YES]];
         if(p.loaded)[p.view evaluateJavaScript:js completionHandler:nil];
@@ -148,7 +150,7 @@ extern "C" void GMPHTML_Viewport(uint64_t token,int width,int height){
 }
 extern "C" void GMPHTML_Notify(uint64_t token,const char *message){
     NSString *value=[NSString stringWithUTF8String:message?message:""];if(!value)return;
-    NSString *js=[NSString stringWithFormat:@"(function(){var p=document.getElementById('gmp-port-status');if(!p){p=document.createElement('div');p.id='gmp-port-status';p.style.cssText='position:fixed;z-index:999999;left:20px;right:20px;top:20px;padding:16px;background:#202020;color:white;font:18px sans-serif;white-space:pre-wrap';p.onclick=function(){this.remove();};document.body.appendChild(p);}p.textContent=%@;})();",JSONString(value)];
+    NSString *js=[NSString stringWithFormat:@"window.__gmpNotify(%@)",JSONString(value)];
     GMPHTML_Call(token,js.UTF8String);
 }
 extern "C" void GMPHTML_OpenURL(const char *address){
@@ -168,6 +170,6 @@ extern "C" int GMPHTML_ImageSize(const void *bytes,size_t size,int *width,int *h
 extern "C" void GMPHTML_BackgroundFrame(uint64_t token,const char *json,int width,int height){
     if(width<1||height<1)return;
     NSString *data=[NSString stringWithUTF8String:json?json:"[]"];
-    NSString *js=[NSString stringWithFormat:@"(function(items){var p=document.getElementById('gmp-background');if(!p){p=document.createElement('div');p.id='gmp-background';p.style.cssText='position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:-1';document.body.prepend(p);}items.forEach(function(v,i){var e=p.children[i];if(!e){e=document.createElement('img');e.style.position='absolute';p.appendChild(e);}var src='asset://garrysmod/'+v.path;if(e.getAttribute('src')!==src)e.setAttribute('src',src);e.style.left=(v.x/%d*100)+'%%';e.style.top=(v.y/%d*100)+'%%';e.style.width=(v.w/%d*100)+'%%';e.style.height=(v.h/%d*100)+'%%';e.style.opacity=v.alpha/255;e.style.transform='rotate('+v.angle+'deg)';});while(p.children.length>items.length)p.lastChild.remove();})(%@);",width,height,width,height,data];
+    NSString *js=[NSString stringWithFormat:@"window.__gmpPaintBackground(%@,%d,%d)",data,width,height];
     GMPHTML_Call(token,js.UTF8String);
 }

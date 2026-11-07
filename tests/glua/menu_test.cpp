@@ -13,7 +13,7 @@ struct Host {
  fs::path corpus,port;
  double time=0;
  std::deque<std::pair<std::string,std::string>> incoming;
- std::vector<std::string> js,commands,errors;
+ std::vector<std::string> js,commands,errors,functions;
  std::map<std::string,std::string> data;
  bool destroyed=false;
  bool read(const std::string &p,std::string &out){
@@ -47,17 +47,23 @@ struct Host {
   if(op=="HTMLCreate"){lua_pushinteger(L,1);return 1;}
   if(op=="HTMLDestroy"){destroyed=true;return 0;}
   if(op=="HTMLPoll"){if(incoming.empty())return 0;auto p=incoming.front();incoming.pop_front();lua_pushstring(L,p.first.c_str());lua_pushstring(L,p.second.c_str());return 2;}
+  if(op=="BackgroundFrame"){js.push_back("window.__gmpPaintBackground("+str(3)+",1280,720)");return 0;}
   if(op=="HTMLCall"){js.push_back(str(3));return 0;}
   if(op=="HTMLReply"){std::ostringstream out;out<<"window.__gmpComplete("<<lua_tonumber(L,3)<<","<<str(4)<<")";js.push_back(out.str());return 0;}
   if(op=="Command"){std::string s;for(int i=2;i<=lua_gettop(L);++i){if(i>2)s+=' ';s+=str(i);}commands.push_back(s);return 0;}
-  if(op=="Phrase"){lua_pushstring(L,("translated:"+str(2)).c_str());return 1;}
+  if(op=="Phrase"){
+   std::ifstream f(corpus/"resource/localization/en/main_menu.properties");std::string line,key=str(2),value=key;
+   while(std::getline(f,line)){if(!line.empty()&&line.back()=='\r')line.pop_back();if(line.rfind(key+"=",0)==0){value=line.substr(key.size()+1);break;}}
+   lua_pushstring(L,value.c_str());return 1;
+  }
+  if(op=="HTMLFunction"){functions.push_back(str(3)+"."+str(4));return 0;}
   if(op=="Notify"){errors.push_back(str(2));return 0;}
   if(op=="HTMLFunction"||op=="HTMLViewport"||op=="HTMLShow"||op=="Log"||op=="Background"||op=="BackgroundClear"||op=="BackgroundFrame"||op=="Sound"||op=="UICommand")return 0;
   return luaL_error(L,"Unexpected test-host operation: %s",op.c_str());
  }
 };
 static std::string quote(const std::string &s){std::string out="\"";for(unsigned char c:s){if(c=='"'||c=='\\'){out+='\\';out+=c;}else if(c=='\n')out+="\\n";else if(c=='\r')out+="\\r";else if(c=='\t')out+="\\t";else if(c<32){const char *hex="0123456789abcdef";out+="\\u00";out+=hex[c>>4];out+=hex[c&15];}else out+=c;}return out+'"';}
-static void output(Host &h){std::cout<<"{";bool first=true;for(auto pair:{std::make_pair("js",&h.js),std::make_pair("commands",&h.commands),std::make_pair("errors",&h.errors)}){if(!first)std::cout<<",";first=false;std::cout<<quote(pair.first)<<":[";bool item=false;for(const auto &s:*pair.second){if(item)std::cout<<",";item=true;std::cout<<quote(s);}std::cout<<"]";pair.second->clear();}std::cout<<"}"<<std::endl;}
+static void output(Host &h){std::cout<<"{";bool first=true;for(auto pair:{std::make_pair("js",&h.js),std::make_pair("commands",&h.commands),std::make_pair("errors",&h.errors),std::make_pair("functions",&h.functions)}){if(!first)std::cout<<",";first=false;std::cout<<quote(pair.first)<<":[";bool item=false;for(const auto &s:*pair.second){if(item)std::cout<<",";item=true;std::cout<<quote(s);}std::cout<<"]";pair.second->clear();}std::cout<<"}"<<std::endl;}
 int main(int argc,char **argv){
  if(argc<3)return 2;
  Host host;host.corpus=argv[1];host.port=argv[2];
@@ -76,7 +82,7 @@ int main(int argc,char **argv){
  host.incoming.push_back({"language.Update","{\"args\":[\"new_game\"],\"request\":1}"});
  host.incoming.push_back({"lua.Run","{\"args\":[\"RunConsoleCommand(\\\"map\\\", %s)\",\"gm_construct\"],\"request\":null}"});
  assert(vm.String("port.MenuTick()","callbacks"));assert(host.commands.size()==1&&host.commands[0]=="map gm_construct");
- bool translated=false;for(auto &s:host.js)if(s.find("translated:new_game")!=std::string::npos)translated=true;assert(translated);
+ bool translated=false;for(auto &s:host.js)if(s.find("Start New Game")!=std::string::npos)translated=true;assert(translated);
  assert(vm.String("ToggleFavourite('gm_construct'); assert(GetMapList().Favourites[1]=='gm_construct'); SaveLastMap('gm_construct','Sandbox')","original persistence"));
  assert(!host.data["menu_cookies.json"].empty());
  assert(vm.String(R"lua(local j=include('port/json.lua'); assert(j.decode('[false,null,"\\ud83d\\ude00"]')[1]==false); assert(j.decode(j.encode({x='a\n"b',n=-12.5})).x=='a\n"b'); for _,bad in ipairs({'01','1.','1e','[1,]','{"a":1,}','"\\ud800"','NaN','true false'}) do assert(not pcall(j.decode,bad),bad) end)lua","JSON strictness"));

@@ -34,6 +34,10 @@ static void GMP_MenuKV(lua_State *L,KeyValues *kv){
 class CGMPMenuLua {
 public:
     void Init(){
+        m_Started=engine->Time();m_Failure.clear();
+        if(!g_pFullFileSystem->FileExists("html/menu.html","GAME")){
+            m_Failure="Missing original html/menu.html in installed game content";Warning("%s\n",m_Failure.c_str());m_Failed=true;return;
+        }
         GMPHTML_SetAssetReader(GMP_HTMLAsset);
         glua::RuntimeConfig config{glua::REALM_MENU,GMP_MenuLuaRead,[](const std::string &line){Msg("GLua menu: %s\n",line.c_str());},[this](lua_State *L){
             lua_newtable(L);lua_pushlightuserdata(L,this);lua_pushcclosure(L,Invoke,1);lua_setfield(L,-2,"Invoke");lua_setglobal(L,"port");
@@ -44,15 +48,17 @@ public:
     }
     void Shutdown(){
         if(m_Ready)m_VM->String("port.MenuShutdown()","menu shutdown");
-        m_Ready=false;m_VM.reset();m_Handles.clear();m_Main=0;GMPHTML_Shutdown();
+        m_Ready=false;m_VM.reset();m_Handles.clear();m_Main=0;m_Visible=false;m_DocumentReady=false;GMPHTML_Shutdown();
     }
     void Tick(bool visible){
-        if(!m_VM)Init();
+        if(!m_VM&&!m_Failed)Init();
+        if(m_Ready&&!m_DocumentReady&&engine->Time()-m_Started>12){m_Failure="Original HTML menu did not become ready within 12 seconds";m_Ready=false;Warning("%s\n",m_Failure.c_str());}
         if(m_Ready&&!m_VM->String("port.MenuTick()","menu frame")){m_Ready=false;Warning("GModPort menu stopped: %s\n",m_VM->Error().c_str());}
         const bool show=visible&&m_Ready&&!engine->IsDrawingLoadingImage();
         if(show!=m_Visible){m_Visible=show;for(uint64_t h:m_Handles)GMPHTML_Show(h,show);}
     }
-    const char *Status()const{return m_VM?m_Ready?"original mainmenu.lua active (menu-only bindings)":m_VM->Error().c_str():"not initialized";}
+    const char *Status()const{return !m_Failure.empty()?m_Failure.c_str():m_VM?m_Ready?m_DocumentReady?"original mainmenu.lua and HTML ready (menu-only bindings)":"waiting for original HTML controller":m_VM->Error().c_str():"not initialized";}
+    bool DocumentReady()const{return m_Ready&&m_DocumentReady;}
     bool Ready()const{return m_Ready;}
 private:
     static int Invoke(lua_State *L){return static_cast<CGMPMenuLua *>(lua_touserdata(L,lua_upvalueindex(1)))->Dispatch(L);}
@@ -142,11 +148,11 @@ private:
         const uint64_t h=static_cast<uint64_t>(luaL_checknumber(L,2));if(!m_Handles.count(h))return luaL_error(L,"Stale HTML panel");
         if(!strcmp(op,"BackgroundFrame")){GMPHTML_BackgroundFrame(h,luaL_checkstring(L,3),luaL_checkinteger(L,4),luaL_checkinteger(L,5));return 0;}
         if(!strcmp(op,"HTMLFunction")){GMPHTML_AddFunction(h,luaL_checkstring(L,3),luaL_checkstring(L,4));return 0;}
-        if(!strcmp(op,"HTMLShow")){GMPHTML_Show(h,lua_toboolean(L,3));return 0;}
+        if(!strcmp(op,"HTMLShow")){GMPHTML_Show(h,lua_toboolean(L,3)&&m_Visible);return 0;}
         if(!strcmp(op,"HTMLViewport")){GMPHTML_Viewport(h,luaL_checkinteger(L,3),luaL_checkinteger(L,4));return 0;}
         if(!strcmp(op,"HTMLCall")){GMPHTML_Call(h,luaL_checkstring(L,3));return 0;}
         if(!strcmp(op,"HTMLReply")){GMPHTML_Reply(h,static_cast<uint64_t>(luaL_checknumber(L,3)),luaL_checkstring(L,4));return 0;}
-        if(!strcmp(op,"HTMLPoll")){char name[256],json[65536];int result=GMPHTML_Poll(h,name,sizeof(name),json,sizeof(json));if(result<0)return luaL_error(L,"HTML callback exceeds native queue limits");if(!result)return 0;lua_pushstring(L,name);lua_pushstring(L,json);return 2;}
+        if(!strcmp(op,"HTMLPoll")){char name[256],json[65536];int result=GMPHTML_Poll(h,name,sizeof(name),json,sizeof(json));if(result<0)return luaL_error(L,"HTML callback exceeds native queue limits");if(!result)return 0;if(!strcmp(name,"_gmp.Ready"))m_DocumentReady=true;lua_pushstring(L,name);lua_pushstring(L,json);return 2;}
         return luaL_error(L,"Unknown menu native operation: %s",op);
     }
     static bool GMP_MenuNameBase(const char *name){std::string normalized;return glua::Runtime::Normalize("",name,normalized)&&normalized==name&&normalized.find('/')==std::string::npos;}
@@ -163,7 +169,7 @@ private:
             }
         }
     }
-    std::unique_ptr<glua::Runtime> m_VM;bool m_Ready=false,m_Visible=false;uint64_t m_Main=0;
+    std::unique_ptr<glua::Runtime> m_VM;bool m_Ready=false,m_Visible=false,m_DocumentReady=false,m_Failed=false;double m_Started=0;std::string m_Failure;uint64_t m_Main=0;
     std::set<uint64_t> m_Handles;std::string m_Language;std::map<std::string,std::string> m_Phrases;
 };
 static CGMPMenuLua s_GMPMenuLua;

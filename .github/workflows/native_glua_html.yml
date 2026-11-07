@@ -41,6 +41,18 @@ jobs:
           cmake --build build-native-host --parallel 3
           ctest --test-dir build-native-host --output-on-failure
           python3 tests/glua/test_icon_package.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test original HTML against native menu Lua
+        run: |
+          npm install --prefix tests/menu --ignore-scripts
+          if [ -x "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" ]; then
+            export PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+          else
+            tests/menu/node_modules/.bin/playwright install chromium
+          fi
+          node tests/menu/browser.mjs deps/garrysmod/garrysmod build-native-host/glua_menu_test
       - name: Record original Lua bootstrap readiness
         run: |
           mkdir -p artifacts
@@ -56,6 +68,7 @@ jobs:
         with:
           name: native-glua-html-preflight
           path: |
+            artifacts/menu/
             artifacts/original-bootstrap.jsonl
             build-gluavm/ios-arm64/
           if-no-files-found: ignore
