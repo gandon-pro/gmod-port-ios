@@ -15,7 +15,6 @@ extern "C" int GMPImage_DecodeRGBA(const void *bytes,size_t count,void **pixels,
     CGColorSpaceRef color=CGColorSpaceCreateDeviceRGB();
     CGContextRef context=CGBitmapContextCreate(rgba,w,h,8,w*4,color,kCGImageAlphaPremultipliedLast|kCGBitmapByteOrder32Big);
     CGColorSpaceRelease(color);if(!context){free(rgba);CGImageRelease(image);return 0;}
-    CGContextTranslateCTM(context,0,h);CGContextScaleCTM(context,1,-1);
     CGContextDrawImage(context,CGRectMake(0,0,w,h),image);CGContextRelease(context);CGImageRelease(image);
     // VGUI expects straight RGBA, whereas CoreGraphics produces premultiplied RGBA.
     for(size_t i=0;i<w*h;i++){unsigned a=rgba[i*4+3];if(a&&a<255)for(int c=0;c<3;c++)rgba[i*4+c]=static_cast<unsigned char>((unsigned(rgba[i*4+c])*255+a/2)/a);}

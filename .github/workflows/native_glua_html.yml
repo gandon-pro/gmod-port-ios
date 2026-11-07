@@ -30,6 +30,7 @@ jobs:
             -framework Foundation -framework CoreGraphics -framework ImageIO -o image-codec-test
           ./image-codec-test
       - name: Check patched GameUI and Q-menu against actual Source headers
+        if: ${{ !cancelled() }}
         run: |
           python3 tools/bootstrap.py --only engine --only sdl
           python3 tools/patch_engine.py deps/engine
