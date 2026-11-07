@@ -510,6 +510,11 @@ change('gameui/BasePanel.cpp', '\t// Check to see if a pending async task has al
 change('gameui/GameUI_Interface.cpp', 'void CGameUI::Shutdown()\n{',
        'extern void GMP_ShutdownMenuLua();\nvoid CGameUI::Shutdown()\n{\n\tGMP_ShutdownMenuLua();')
 
+change('gameui/GameUI_Interface.cpp', 'void CGameUI::OnGameUIActivated()\n{',
+       'extern void GMP_SetMenuActive(bool active);\nvoid CGameUI::OnGameUIActivated()\n{\n\tGMP_SetMenuActive(true);')
+change('gameui/GameUI_Interface.cpp', 'void CGameUI::OnGameUIHidden()\n{',
+       'void CGameUI::OnGameUIHidden()\n{\n\tGMP_SetMenuActive(false);')
+
 # The open spawn menu (gmp_physgun.inl) takes the touches; without this, scrolling it turns the camera.
 path='game/client/cdll_client_int.cpp'
 change(path, 'void CHLClient::IN_TouchEvent( int type, int fingerId, int x, int y )\n'

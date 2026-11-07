@@ -50,12 +50,16 @@ public:
         if(m_Ready)m_VM->String("port.MenuShutdown()","menu shutdown");
         m_Ready=false;m_VM.reset();m_Handles.clear();m_Main=0;m_Visible=false;m_DocumentReady=false;GMPHTML_Shutdown();
     }
+    // BasePanel can stay locally visible while its parent GameUI is hidden.
+    // Engine activation events, including native Resume, own this overlay state.
+    void SetActive(bool active){m_Active=active;if(!active)SetShown(false);}
+    void SetShown(bool show){if(show==m_Visible)return;m_Visible=show;for(uint64_t h:m_Handles)GMPHTML_Show(h,show);}
     void Tick(bool visible){
         if(!m_VM&&!m_Failed)Init();
         if(m_Ready&&!m_DocumentReady&&engine->Time()-m_Started>12){m_Failure="Original HTML menu did not become ready within 12 seconds";m_Ready=false;Warning("%s\n",m_Failure.c_str());}
         if(m_Ready&&!m_VM->String("port.MenuTick()","menu frame")){m_Ready=false;Warning("GModPort menu stopped: %s\n",m_VM->Error().c_str());}
-        const bool show=visible&&m_Ready&&!engine->IsDrawingLoadingImage();
-        if(show!=m_Visible){m_Visible=show;for(uint64_t h:m_Handles)GMPHTML_Show(h,show);}
+        const bool show=m_Active&&visible&&m_Ready&&!engine->IsDrawingLoadingImage();
+        SetShown(show);
     }
     const char *Status()const{return !m_Failure.empty()?m_Failure.c_str():m_VM?m_Ready?m_DocumentReady?"original mainmenu.lua and HTML ready (menu-only bindings)":"waiting for original HTML controller":m_VM->Error().c_str():"not initialized";}
     bool DocumentReady()const{return m_Ready&&m_DocumentReady;}
@@ -128,8 +132,8 @@ private:
             command+='\n';engine->ClientCmd_Unrestricted(command.c_str());return 0;
         }
         if(!strcmp(op,"UICommand")){vgui::ivgui()->PostMessage(BasePanel()->GetVPanel(),new KeyValues("Command","command",luaL_checkstring(L,2)),NULL);return 0;}
-        if(!strcmp(op,"Hide")){GameUI().HideGameUI();return 0;}
-        if(!strcmp(op,"Activate")){GameUI().ActivateGameUI();return 0;}
+        if(!strcmp(op,"Hide")){SetActive(false);GameUI().HideGameUI();return 0;}
+        if(!strcmp(op,"Activate")){SetActive(true);GameUI().ActivateGameUI();return 0;}
         if(!strcmp(op,"ConsoleVisible")){lua_pushboolean(L,GameConsole().IsConsoleVisible());return 1;}
         if(!strcmp(op,"Console")){GameConsole().Activate();return 0;}
         if(!strcmp(op,"Sound")){vgui::surface()->PlaySound(luaL_checkstring(L,2));return 0;}
@@ -173,9 +177,11 @@ private:
             }
         }
     }
-    std::unique_ptr<glua::Runtime> m_VM;bool m_Ready=false,m_Visible=false,m_DocumentReady=false,m_Failed=false;double m_Started=0;std::string m_Failure;uint64_t m_Main=0;
+    std::unique_ptr<glua::Runtime> m_VM;bool m_Active=true,m_Ready=false,m_Visible=false,m_DocumentReady=false,m_Failed=false;double m_Started=0;std::string m_Failure;uint64_t m_Main=0;
     std::set<uint64_t> m_Handles;std::string m_Language;std::map<std::string,std::string> m_Phrases;
 };
 static CGMPMenuLua s_GMPMenuLua;
 CON_COMMAND(gmp_glua_menu_status,"Print native menu GLua bootstrap status"){Msg("GLua menu: %s\n",s_GMPMenuLua.Status());}
 void GMP_ShutdownMenuLua(){s_GMPMenuLua.Shutdown();}
+
+void GMP_SetMenuActive(bool active){s_GMPMenuLua.SetActive(active);}

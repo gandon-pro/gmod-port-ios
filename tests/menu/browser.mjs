@@ -75,6 +75,11 @@ try{
   await page.waitForTimeout(600);
   await chain;
   assert(commands.includes('map gm_construct'),JSON.stringify(commands));
+  await page.getByText('Resume Game',{exact:true}).waitFor();
+  await page.getByText('Resume Game',{exact:true}).click();
+  await page.waitForTimeout(100);
+  await chain;
+  assert(commands.includes('gameui_hide'),JSON.stringify(commands));
   assert.equal(errors.length,0,JSON.stringify(errors));
   await writeFile(path.join(artifact,'result.json'),JSON.stringify({browser:browser.version(),commands,errors,missingFixtureAssets:resources},null,2));
   console.log('PASS: original HTML, localization callbacks, installed-map selection and real Lua map command');

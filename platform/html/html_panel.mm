@@ -35,11 +35,14 @@ static std::set<uint64_t> alive;
 static NSMutableDictionary<NSNumber *,GMPHTMLPanel *> *panels;
 static BOOL Active(uint64_t token){std::lock_guard<std::mutex> guard(queueLock);return alive.count(token)!=0;}
 static NSString *JSONString(NSString *text){NSData *data=[NSJSONSerialization dataWithJSONObject:@[text] options:0 error:nil];NSString *value=[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];return [value substringWithRange:NSMakeRange(1,value.length-2)];}
-static UIView *HostView(){
+static UIWindow *HostWindow(){
     for(UIScene *scene in UIApplication.sharedApplication.connectedScenes)if(scene.activationState==UISceneActivationStateForegroundActive&&[scene isKindOfClass:UIWindowScene.class])
-        for(UIWindow *window in ((UIWindowScene *)scene).windows)if(window.isKeyWindow)return window.rootViewController.view;
+        for(UIWindow *window in ((UIWindowScene *)scene).windows)if(window.isKeyWindow)return window;
+    // SDL2 also supports the legacy UIApplication lifecycle without UIScenes.
+    for(UIWindow *window in UIApplication.sharedApplication.windows)if(window.isKeyWindow)return window;
     return nil;
 }
+
 @implementation GMPHTMLProxy
 - (void)userContentController:(WKUserContentController *)controller didReceiveScriptMessage:(WKScriptMessage *)message {
     GMPHTMLPanel *panel=self.owner;if(!panel||!message.frameInfo.isMainFrame||![message.body isKindOfClass:NSDictionary.class])return;
@@ -85,7 +88,7 @@ extern "C" uint64_t GMPHTML_Create(const char *address){
     const uint64_t token=nextId.fetch_add(1);{std::lock_guard<std::mutex> guard(queueLock);alive.insert(token);}
     dispatch_async(dispatch_get_main_queue(),^{
         if(!Active(token))return;
-        UIView *host=HostView();if(!host){NSLog(@"GModPort HTML: no active SDL host view");std::lock_guard<std::mutex> guard(queueLock);alive.erase(token);return;}
+        UIWindow *host=HostWindow();if(!host){NSLog(@"GModPort HTML: no active SDL host view");std::lock_guard<std::mutex> guard(queueLock);alive.erase(token);return;}
         if(!panels)panels=[NSMutableDictionary dictionary];
         GMPHTMLPanel *panel=[GMPHTMLPanel new];panel.token=token;panel.address=url;panel.functions=[NSMutableSet set];
         GMPHTMLProxy *proxy=[GMPHTMLProxy new];proxy.owner=panel;panel.proxy=proxy;
@@ -93,6 +96,11 @@ extern "C" uint64_t GMPHTML_Create(const char *address){
         [config.userContentController addScriptMessageHandler:proxy name:@"gmp"];
         panel.view=[[WKWebView alloc] initWithFrame:host.bounds configuration:config];panel.view.navigationDelegate=proxy;panel.view.customUserAgent=@"Valve Source Client GModPort iOS WebKit";
         panel.view.scrollView.bounces=NO;
+        // The menu is an edge-to-edge overlay, independent of SDL render size.
+        panel.view.scrollView.contentInsetAdjustmentBehavior=UIScrollViewContentInsetAdjustmentNever;
+        panel.view.scrollView.contentInset=UIEdgeInsetsZero;
+        panel.view.scrollView.scrollIndicatorInsets=UIEdgeInsetsZero;
+        panel.view.scrollView.automaticallyAdjustsScrollIndicatorInsets=NO;
         NSString *bootstrap=[NSString stringWithUTF8String:kGMPHTMLBridge];
         [config.userContentController addUserScript:[[WKUserScript alloc] initWithSource:bootstrap injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES]];
         panel.view.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight;panel.view.opaque=NO;panel.view.backgroundColor=UIColor.clearColor;
@@ -116,7 +124,7 @@ extern "C" void GMPHTML_Shutdown(){
         [panels removeAllObjects];
     });
 }
-extern "C" void GMPHTML_Show(uint64_t token,int visible){dispatch_async(dispatch_get_main_queue(),^{GMPHTMLPanel *p=panels[@(token)];if(!p)return;p.view.hidden=!visible;if(visible){if(!p.loaded){p.loaded=YES;[p.view loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:p.address]]];}[p.view.superview bringSubviewToFront:p.view];}});}
+extern "C" void GMPHTML_Show(uint64_t token,int visible){dispatch_async(dispatch_get_main_queue(),^{GMPHTMLPanel *p=panels[@(token)];if(!p)return;p.view.hidden=!visible;p.view.userInteractionEnabled=visible;if(visible){if(!p.loaded){p.loaded=YES;[p.view loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:p.address]]];}[p.view.superview bringSubviewToFront:p.view];}});}
 extern "C" void GMPHTML_Bounds(uint64_t token,double x,double y,double w,double h){
     if(!std::isfinite(x)||!std::isfinite(y)||!std::isfinite(w)||!std::isfinite(h)||w<0||h<0)return;
     dispatch_async(dispatch_get_main_queue(),^{GMPHTMLPanel *p=panels[@(token)];CGSize size=p.view.superview.bounds.size;p.view.frame=CGRectMake(x*size.width,y*size.height,w*size.width,h*size.height);});

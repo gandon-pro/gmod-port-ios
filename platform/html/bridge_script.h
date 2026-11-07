@@ -44,7 +44,7 @@ static const char kGMPHTMLBridge[] = R"GMPJS(
     window.__gmpViewport = function (width) {
         var meta = document.querySelector('meta[name=viewport]');
         if (!meta) { meta = document.createElement('meta'); meta.name = 'viewport'; document.head.appendChild(meta); }
-        meta.content = 'width=' + width + ',user-scalable=no';
+        meta.content = 'width=' + width + ',user-scalable=no,viewport-fit=cover';
     };
     window.__gmpNotify = function (message) {
         if (!document.body) return;

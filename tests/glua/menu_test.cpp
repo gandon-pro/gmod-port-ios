@@ -15,7 +15,7 @@ struct Host {
  std::deque<std::pair<std::string,std::string>> incoming;
  std::vector<std::string> js,commands,errors,functions;
  std::map<std::string,std::string> data;
- bool destroyed=false;
+ bool destroyed=false,inGame=false;
  bool read(const std::string &p,std::string &out){
   fs::path file=p.rfind("port/",0)==0?port/p.substr(5):corpus/"lua"/p;
   std::ifstream f(file,std::ios::binary);if(!f)return false;out.assign(std::istreambuf_iterator<char>(f),{});return true;
@@ -26,7 +26,10 @@ struct Host {
   if(op=="Width"||op=="Height"){lua_pushinteger(L,op=="Width"?1280:720);return 1;}
   if(op=="Time"){lua_pushnumber(L,time);return 1;}
   if(op=="Protocol"){lua_pushinteger(L,24);return 1;} // Test host value, not a target-build claim.
-  if(op=="InGame"||op=="ConsoleVisible"||op=="Loading"){lua_pushboolean(L,false);return 1;}
+  if(op=="InGame"){lua_pushboolean(L,inGame);return 1;}
+  if(op=="Hide"){commands.push_back("gameui_hide");return 0;}
+  if(op=="Activate"){commands.push_back("gameui_activate");return 0;}
+  if(op=="ConsoleVisible"||op=="Loading"){lua_pushboolean(L,false);return 1;}
   if(op=="ConVar"){lua_pushstring(L,str(2)=="gmod_language"?"en":"0");return 1;}
   if(op=="Read"){std::ifstream f(corpus/str(2),std::ios::binary);if(!f)lua_pushnil(L);else{std::string s((std::istreambuf_iterator<char>(f)),{});lua_pushlstring(L,s.data(),s.size());}return 1;}
   if(op=="Exists"){const std::string path=str(2);lua_pushboolean(L,fs::exists(corpus/path)||path=="maps/gm_flatgrass.bsp"||path=="maps/gm_construct.bsp");return 1;}
@@ -50,7 +53,7 @@ struct Host {
   if(op=="BackgroundFrame"){js.push_back("window.__gmpPaintBackground("+str(3)+",1280,720)");return 0;}
   if(op=="HTMLCall"){js.push_back(str(3));return 0;}
   if(op=="HTMLReply"){std::ostringstream out;out<<"window.__gmpComplete("<<lua_tonumber(L,3)<<","<<str(4)<<")";js.push_back(out.str());return 0;}
-  if(op=="Command"){std::string s;for(int i=2;i<=lua_gettop(L);++i){if(i>2)s+=' ';s+=str(i);}commands.push_back(s);return 0;}
+  if(op=="Command"){if(str(2)=="map")inGame=true;std::string s;for(int i=2;i<=lua_gettop(L);++i){if(i>2)s+=' ';s+=str(i);}commands.push_back(s);return 0;}
   if(op=="Phrase"){
    std::ifstream f(corpus/"resource/localization/en/main_menu.properties");std::string line,key=str(2),value=key;
    while(std::getline(f,line)){if(!line.empty()&&line.back()=='\r')line.pop_back();if(line.rfind(key+"=",0)==0){value=line.substr(key.size()+1);break;}}
@@ -82,6 +85,8 @@ int main(int argc,char **argv){
  host.incoming.push_back({"language.Update","{\"args\":[\"new_game\"],\"request\":1}"});
  host.incoming.push_back({"lua.Run","{\"args\":[\"RunConsoleCommand(\\\"map\\\", %s)\",\"gm_construct\"],\"request\":null}"});
  assert(vm.String("port.MenuTick()","callbacks"));assert(host.commands.size()==1&&host.commands[0]=="map gm_construct");
+ host.incoming.push_back({"lua.Run","{\"args\":[\"gui.HideGameUI()\"],\"request\":null}"});
+ assert(vm.String("port.MenuTick()","resume callback"));assert(host.commands.back()=="gameui_hide");
  bool translated=false;for(auto &s:host.js)if(s.find("Start New Game")!=std::string::npos)translated=true;assert(translated);
  assert(vm.String("ToggleFavourite('gm_construct'); assert(GetMapList().Favourites[1]=='gm_construct'); SaveLastMap('gm_construct','Sandbox')","original persistence"));
  assert(!host.data["menu_cookies.json"].empty());
