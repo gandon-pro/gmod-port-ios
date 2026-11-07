@@ -155,6 +155,44 @@ change('materialsystem/shaderapidx9/shaderdevicedx8.cpp',
 change('appframework/sdlmgr.cpp', '\tretval = SDL_GL_GetProcAddress(fn);',
        '#if defined(SOURCE_IOS)\n\textern void* GModPort_GLProcAddress(const char* name);\n\tretval = GModPort_GLProcAddress(fn);\n#else\n\tretval = SDL_GL_GetProcAddress(fn);\n#endif')
 
+# GLES3 exposes this core buffer query; retain it in Source's procedure table.
+change('public/togles/linuxwin/glfuncs.h',
+       'GL_FUNC_VOID(OpenGL,true,glGetIntegerv,(GLenum a,GLint *b),(a,b))',
+       'GL_FUNC_VOID(OpenGL,true,glGetIntegerv,(GLenum a,GLint *b),(a,b))\n'
+       'GL_FUNC_VOID(OpenGL,true,glGetBufferParameteriv,(GLenum a,GLenum b,GLint *c),(a,b,c))')
+
+# Keep the failed map from poisoning the lock state. Use the existing bounded
+# CPU staging + Unlock/SubData path only when the real GPU store is valid.
+change('togles/linuxwin/cglmbuffer.cpp',
+       '\t\tmapPtr = (char*)gGL->glMapBufferRange( m_buffGLTarget, pParams->m_nOffset, pParams->m_nSize, parms);',
+       '\t\tmapPtr = (char*)gGL->glMapBufferRange( m_buffGLTarget, pParams->m_nOffset, pParams->m_nSize, parms);\n'
+       '#if defined(SOURCE_IOS)\n'
+       '\t\tif ( !mapPtr )\n'
+       '\t\t{\n'
+       '\t\t\tGLenum mapError = gGL->glGetError();\n'
+       '\t\t\tGLint bytes = 0, mapped = 0, bound = 0;\n'
+       '\t\t\tgGL->glGetBufferParameteriv(m_buffGLTarget, GL_BUFFER_SIZE, &bytes);\n'
+       '\t\t\tgGL->glGetBufferParameteriv(m_buffGLTarget, GL_BUFFER_MAPPED, &mapped);\n'
+       '\t\t\tGLenum binding = m_type == kGLMVertexBuffer ? GL_ARRAY_BUFFER_BINDING : m_type == kGLMIndexBuffer ? GL_ELEMENT_ARRAY_BUFFER_BINDING : m_type == kGLMUniformBuffer ? GL_UNIFORM_BUFFER_BINDING : GL_PIXEL_UNPACK_BUFFER_BINDING;\n'
+       '\t\t\tgGL->glGetIntegerv(binding, &bound);\n'
+       '\t\t\tbool canStage = !g_bDisableStaticBuffer && mapError != GL_OUT_OF_MEMORY && !mapped && GLuint(bound) == m_nHandle && bytes >= 0 &&\n'
+       '\t\t\t\tpParams->m_nOffset <= uint(bytes) && pParams->m_nSize <= uint(bytes) - pParams->m_nOffset && pParams->m_nSize <= GL_STATIC_BUFFER_SIZE &&\n'
+       '\t\t\t\t(m_type == kGLMVertexBuffer || m_type == kGLMIndexBuffer);\n'
+       '\t\t\tstatic unsigned reports = 0;\n'
+       '\t\t\tif ( reports++ < 8 ) Warning("GMP buffer: map failed error=0x%04x handle=%u bound=%d target=0x%04x allocated=%d requested=%u offset=%u mapped=%d staging=%d\\n", mapError, m_nHandle, bound, m_buffGLTarget, bytes, pParams->m_nSize, pParams->m_nOffset, mapped, canStage);\n'
+       '\t\t\tif ( canStage ) { m_pStaticBuffer = m_StaticBuffers[m_type == kGLMVertexBuffer ? 0 : 1]; mapPtr = m_pStaticBuffer; }\n'
+       '\t\t}\n'
+       '#endif')
+change('togles/linuxwin/cglmbuffer.cpp', '\tm_bMapped = true;\n\n\tm_pLastMappedAddress = (float*)resultPtr;',
+       '\tm_bMapped = resultPtr != NULL;\n\n\tm_pLastMappedAddress = (float*)resultPtr;')
+change('togles/linuxwin/cglmbuffer.cpp', '\tchar *resultPtr = NULL;\n\t\n\tif ( m_bMapped )',
+       '\tchar *resultPtr = NULL;\n\t*pAddressOut = NULL;\n\t\n\tif ( m_bMapped )')
+change('materialsystem/shaderapidx9/dynamicvb.h',
+       '\tif ( !IsX360() && !m_pVB && !m_pSysmemBuffer )\n\t\treturn 0;',
+       '\tif ( !IsX360() && !m_pVB && !m_pSysmemBuffer )\n\t{\n'
+       '\t\tWarning("GMP buffer: vertex buffer has no GPU/system storage vertices=%d capacity=%d bytes=%d dynamic=%d\\n", numVerts, m_VertexCount, m_nBufferSize, m_bDynamic);\n'
+       '\t\treturn 0;\n\t}')
+
 # Observe the real sampler path; do not infer sRGB support from an extension warning.
 change('togles/linuxwin/glmgr.cpp',
        '\tGLMDebugPrintf( "GL sampler object usage: %s\\n", m_bUseSamplerObjects ? "ENABLED" : "DISABLED" );',

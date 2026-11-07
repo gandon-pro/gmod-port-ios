@@ -112,5 +112,7 @@ jobs:
         run: |
           python3 tools/bootstrap.py --only engine
           python3 tools/patch_engine.py deps/engine
+      - name: Test failed-map recovery against real GLES3 buffers
+        run: python3 tests/test_buffer_fallback.py
       - name: Test production Source sRGB fallback on real GLES3
         run: python3 tests/test_srgb_gpu.py deps/engine
