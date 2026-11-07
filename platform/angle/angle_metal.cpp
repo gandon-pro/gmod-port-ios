@@ -13,6 +13,7 @@ namespace {
 EGLDisplay display=EGL_NO_DISPLAY;
 EGLSurface surface=EGL_NO_SURFACE;
 EGLConfig config=nullptr;
+EGLContext presentationContext=EGL_NO_CONTEXT;
 struct Context { EGLContext handle; EGLSurface target; bool ownsSurface; };
 SDL_MetalView view=nullptr;
 bool surfaceInfoLogged=false;
@@ -26,13 +27,15 @@ bool Fail(const char* operation) {
 const char* Error() { return error; }
 void Shutdown() {
     if (display!=EGL_NO_DISPLAY) {
-        // The primary context is normally current when the engine shuts down.
-        if (eglGetCurrentContext()!=EGL_NO_CONTEXT) gamma.Release();
+        // VAOs/FBOs belong to the primary context. Never delete their names
+        // against a shared worker context with a different object namespace.
+        if (presentationContext!=EGL_NO_CONTEXT &&
+            eglMakeCurrent(display,surface,surface,presentationContext)) gamma.Release();
         eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);
         if (surface!=EGL_NO_SURFACE) eglDestroySurface(display,surface);
         eglTerminate(display);
     }
-    surface=EGL_NO_SURFACE; display=EGL_NO_DISPLAY; config=nullptr; surfaceInfoLogged=false;
+    surface=EGL_NO_SURFACE; display=EGL_NO_DISPLAY; config=nullptr; surfaceInfoLogged=false; presentationContext=EGL_NO_CONTEXT;
     if (view) SDL_Metal_DestroyView(view);
     view=nullptr;
 }
@@ -70,6 +73,7 @@ void* CreateContext(void* share) {
         target=eglCreatePbufferSurface(display,config,size);
         if (target==EGL_NO_SURFACE) { Fail("eglCreatePbufferSurface"); eglDestroyContext(display,context); return nullptr; }
     }
+    if (!share) presentationContext=context;
     return new Context{context,target,share!=nullptr};
 }
 bool MakeCurrent(void* context) {
@@ -105,6 +109,7 @@ void DestroyContext(void* context) {
         }
         if (eglGetCurrentContext()==ctx->handle) MakeCurrent(nullptr);
         eglDestroyContext(display,ctx->handle);
+        if (presentationContext==ctx->handle) presentationContext=EGL_NO_CONTEXT;
         if (ctx->ownsSurface) eglDestroySurface(display,ctx->target);
     }
     delete ctx;
