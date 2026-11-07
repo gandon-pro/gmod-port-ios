@@ -103,6 +103,28 @@ Full application linking and these on-device steps have not yet been observed
 for this patch. No Xcode/iOS SDK is installed in the Linux editing workspace;
 iOS compiler checks run in GitHub Actions.
 
+## Pause-overlay regression
+
+The HTML view must follow `CGameUI::OnGameUIActivated/OnGameUIHidden`; local
+`BasePanel::IsVisible()` does not include its parent's visibility. The native
+`Hide` binding hides the overlay immediately before asking Source to hide GameUI.
+The native HideGameUI wrapper also clears the overlay, including the existing
+OnLevelLoadingFinished path. Map commands and loading-start events hide it before
+the transition. Activation still honors native dialogs and loading. The page is created only
+when it can actually be presented, so direct map startup does not expire hidden
+page startup timers.
+
+WKWebView is attached to the full UIWindow rather than the SDL controller's view.
+Its scroll view disables automatic safe-area content insets; the viewport uses
+`viewport-fit=cover`. Hidden views explicitly stop accepting input.
+
+`tests/ios_html/run.py` builds a fixture app from the actual production WebKit
+transport and runs it in an installed iPhone Simulator. It checks edge-to-edge
+frame/zero insets, the Resume message, hidden input release, reopening and
+landscape resize. It is a UIKit/WebKit transport test, not a running Source game.
+The original-HTML browser test separately clicks the real Resume Game button
+through original Lua and requires the `gameui_hide` operation.
+
 ## General GLua bootstrap remains incomplete
 
 The independent `glua_bootstrap_probe deps/garrysmod/garrysmod` deliberately still

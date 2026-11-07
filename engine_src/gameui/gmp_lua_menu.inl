@@ -53,14 +53,18 @@ public:
     // BasePanel can stay locally visible while its parent GameUI is hidden.
     // Engine activation events, including native Resume, own this overlay state.
     void SetActive(bool active){m_Active=active;if(!active)SetShown(false);}
-    void SetShown(bool show){if(show==m_Visible)return;m_Visible=show;for(uint64_t h:m_Handles)GMPHTML_Show(h,show);}
+    void SetShown(bool show){if(show==m_Visible)return;m_Visible=show;if(show)m_Started=engine->Time();for(uint64_t h:m_Handles)GMPHTML_Show(h,show);}
     void Tick(bool visible){
-        if(!m_VM&&!m_Failed)Init();
-        if(m_Ready&&!m_DocumentReady&&engine->Time()-m_Started>12){m_Failure="Original HTML menu did not become ready within 12 seconds";m_Ready=false;Warning("%s\n",m_Failure.c_str());}
+        const bool allowed=m_Active&&visible&&!engine->IsDrawingLoadingImage();
+        // Do not create a hidden page whose original startup timers would expire
+        // before the first real menu activation (e.g. direct map startup).
+        if(!m_VM&&!m_Failed){if(!allowed)return;Init();}
         if(m_Ready&&!m_VM->String("port.MenuTick()","menu frame")){m_Ready=false;Warning("GModPort menu stopped: %s\n",m_VM->Error().c_str());}
-        const bool show=m_Active&&visible&&m_Ready&&!engine->IsDrawingLoadingImage();
-        SetShown(show);
+        // Lua may call Hide during MenuTick. Read activation state after callbacks.
+        SetShown(m_Active&&visible&&m_Ready&&!engine->IsDrawingLoadingImage());
+        if(m_Visible&&m_Ready&&!m_DocumentReady&&engine->Time()-m_Started>12){m_Failure="Original HTML menu did not become ready within 12 visible seconds";m_Ready=false;SetShown(false);Warning("%s\n",m_Failure.c_str());}
     }
+
     const char *Status()const{return !m_Failure.empty()?m_Failure.c_str():m_VM?m_Ready?m_DocumentReady?"original mainmenu.lua and HTML ready (menu-only bindings)":"waiting for original HTML controller":m_VM->Error().c_str():"not initialized";}
     bool DocumentReady()const{return m_Ready&&m_DocumentReady;}
     bool Ready()const{return m_Ready;}
@@ -129,7 +133,7 @@ private:
             }
             std::string command=name;
             for(int i=3;i<=lua_gettop(L);++i){const char *value=luaL_checkstring(L,i);if(strpbrk(value,"\"\r\n;"))return luaL_error(L,"Invalid console argument");command+=" \"";command+=value;command+='"';}
-            command+='\n';engine->ClientCmd_Unrestricted(command.c_str());return 0;
+            command+='\n';if(!strcmp(name,"map"))SetActive(false);engine->ClientCmd_Unrestricted(command.c_str());return 0;
         }
         if(!strcmp(op,"UICommand")){vgui::ivgui()->PostMessage(BasePanel()->GetVPanel(),new KeyValues("Command","command",luaL_checkstring(L,2)),NULL);return 0;}
         if(!strcmp(op,"Hide")){SetActive(false);GameUI().HideGameUI();return 0;}

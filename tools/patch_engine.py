@@ -510,8 +510,14 @@ change('gameui/BasePanel.cpp', '\t// Check to see if a pending async task has al
 change('gameui/GameUI_Interface.cpp', 'void CGameUI::Shutdown()\n{',
        'extern void GMP_ShutdownMenuLua();\nvoid CGameUI::Shutdown()\n{\n\tGMP_ShutdownMenuLua();')
 
+change('gameui/GameUI_Interface.cpp', 'void CGameUI::ActivateGameUI()\n{',
+       'extern void GMP_SetMenuActive(bool active);\nvoid CGameUI::ActivateGameUI()\n{\n\tGMP_SetMenuActive(true);')
+change('gameui/GameUI_Interface.cpp', 'void CGameUI::HideGameUI()\n{',
+       'void CGameUI::HideGameUI()\n{\n\tGMP_SetMenuActive(false);')
+change('gameui/GameUI_Interface.cpp', 'void CGameUI::OnLevelLoadingStarted( bool bShowProgressDialog )\n{',
+       'void CGameUI::OnLevelLoadingStarted( bool bShowProgressDialog )\n{\n\tGMP_SetMenuActive(false);')
 change('gameui/GameUI_Interface.cpp', 'void CGameUI::OnGameUIActivated()\n{',
-       'extern void GMP_SetMenuActive(bool active);\nvoid CGameUI::OnGameUIActivated()\n{\n\tGMP_SetMenuActive(true);')
+       'void CGameUI::OnGameUIActivated()\n{\n\tGMP_SetMenuActive(true);')
 change('gameui/GameUI_Interface.cpp', 'void CGameUI::OnGameUIHidden()\n{',
        'void CGameUI::OnGameUIHidden()\n{\n\tGMP_SetMenuActive(false);')
 
