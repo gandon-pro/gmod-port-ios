@@ -494,6 +494,28 @@ change('game/shared/hl2mp/weapon_physcannon.cpp', '#include "tier0/memdbgon.h"',
 change('gameui/BasePanel.cpp', 'void CBasePanel::RunFrame()\n{',
        'void CBasePanel::RunFrame()\n{\n\tbool gmpMenuDialog = ( m_hOptionsDialog.Get() && m_hOptionsDialog->IsVisible() ) || GameConsole().IsConsoleVisible();\n\ts_GMPMenuLua.Tick( IsVisible() && !gmpMenuDialog );')
 
+# CGameMenu::SetVisible(false) normally only moves the still-visible popup
+# behind its siblings. HTML needs the popup genuinely hidden, including calls
+# from UpdateGameMenus() between RunFrame and rendering.
+change('gameui/BasePanel.cpp', '\tvirtual void SetVisible(bool state)\n\t{\n\t\tif ( m_hMainMenuOverridePanel )',
+       '\tvirtual void SetVisible(bool state)\n\t{\n'
+       '\t\tif ( s_GMPMenuLua.DocumentReady() )\n'
+       '\t\t{\n'
+       '\t\t\tBaseClass::SetVisible(false);\n'
+       '\t\t\tSetMouseInputEnabled(false);\n'
+       '\t\t\tSetKeyBoardInputEnabled(false);\n'
+       '\t\t\treturn;\n'
+       '\t\t}\n'
+       '\t\tSetMouseInputEnabled(true);\n'
+       '\t\tSetKeyBoardInputEnabled(true);\n'
+       '\t\tif ( m_hMainMenuOverridePanel )')
+# Avoid painting a second native background/dimmer under the HTML renderer.
+# Loading, native Options and console still keep their own background.
+change('gameui/BasePanel.cpp', 'void CBasePanel::PaintBackground()\n{',
+       'void CBasePanel::PaintBackground()\n{\n'
+       '\tif ( s_GMPMenuLua.DocumentReady() && s_GMPMenuLua.Visible() && !g_hLoadingDialog.Get() && !m_ExitingFrameCount )\n'
+       '\t\treturn;\n')
+
 change('gameui/BasePanel.cpp', '\t// Check to see if a pending async task has already finished',
        '\t// Original HTML owns main-menu input and appearance after its controller is ready.\n'
        '\tstatic bool gmpWasOriginalMenu = false;\n'

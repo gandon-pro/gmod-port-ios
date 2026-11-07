@@ -66,6 +66,7 @@ public:
     }
 
     const char *Status()const{return !m_Failure.empty()?m_Failure.c_str():m_VM?m_Ready?m_DocumentReady?"original mainmenu.lua and HTML ready (menu-only bindings)":"waiting for original HTML controller":m_VM->Error().c_str():"not initialized";}
+    bool Visible()const{return m_Visible;}
     bool DocumentReady()const{return m_Ready&&m_DocumentReady;}
     bool Ready()const{return m_Ready;}
 private:

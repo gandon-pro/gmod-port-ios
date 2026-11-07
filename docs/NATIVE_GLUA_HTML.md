@@ -138,3 +138,28 @@ includes/util/color.lua:8: attempt to call global 'RegisterMetaTable' (a nil val
 The menu-specific entry point avoids claiming that this general API port is done.
 Metatable/value types, entities, game libraries, general VGUI and gamemode startup
 remain unimplemented. See `docs/GPT_TASK_GLUA.md` for the earlier interface contract.
+
+## Duplicate native/HTML menu regression
+
+The pinned Source `CGameMenu::SetVisible(false)` deliberately calls
+`BaseClass::SetVisible(true)` and moves the popup backwards. Hiding it through
+that override did not remove its rendering. The iOS patch now makes that
+specific override hide the actual VGUI popup and disable its mouse/keyboard
+input while the original HTML controller is ready. Requests from
+`UpdateGameMenus()` cannot reshow it. Losing the HTML controller restores the
+native fallback and its input. Native Options and console remain available.
+The native background/dimmer also skips painting while the ready HTML menu is
+visible, except during loading or application exit.
+
+`python3 tests/test_menu_visibility.py deps/engine/gameui/BasePanel.cpp` compiles
+the actual patched override in a small VGUI fixture. It reproduces the original
+always-visible behavior and checks hide, repeated show, input and fallback.
+This is a host regression check, not a Source/iPhone runtime capture.
+
+The graphics profile already requests full-resolution textures, anisotropic
+filtering, model detail, shadows, water reflections, phong and HDR. This does
+not establish parity with PC Garry's Mod: the current pinned engine uses a
+stock Source sky fallback for GMod's procedural `g_sky`, and `env_skypaint`
+is not implemented. No renderer or brightness change is justified by a single
+device screenshot without matched map, position and PC settings. Removing the
+second pause dimmer only affects the menu presentation, not gameplay lighting.
