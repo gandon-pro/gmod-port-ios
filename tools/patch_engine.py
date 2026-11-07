@@ -488,7 +488,7 @@ change(path, '\tif( !bFoundServerBrowser && !ModInfo().IsSinglePlayerOnly() )',
 change('game/shared/hl2mp/weapon_physcannon.cpp', '#include "gmp_physgun.inl"',
        '#include "gmp_physgun.inl"\n#include "gmp_lua_bridge.inl"')
 change('gameui/BasePanel.cpp', 'void CBasePanel::RunFrame()\n{',
-       '#include "gmp_lua_menu.inl"\n\nvoid CBasePanel::RunFrame()\n{\n\ts_GMPMenuLua.Tick();')
+       '#include "gmp_lua_menu.inl"\n\nvoid CBasePanel::RunFrame()\n{\n\tbool gmpMenuDialog = ( m_hOptionsDialog.Get() && m_hOptionsDialog->IsVisible() ) || GameConsole().IsConsoleVisible();\n\ts_GMPMenuLua.Tick( IsVisible() && !gmpMenuDialog );')
 
 change('gameui/GameUI_Interface.cpp', 'void CGameUI::Shutdown()\n{',
        'extern void GMP_ShutdownMenuLua();\nvoid CGameUI::Shutdown()\n{\n\tGMP_ShutdownMenuLua();')

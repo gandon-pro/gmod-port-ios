@@ -49,10 +49,12 @@ add_library(port_source_loader STATIC platform/source_loader.cpp)
 target_include_directories(port_source_loader PRIVATE "${SOURCE_ENGINE}/public" "${SOURCE_ENGINE}/public/tier0" "${SOURCE_ENGINE}/public/tier1")
 target_compile_definitions(port_source_loader PRIVATE POSIX=1 OSX=1 GNUC=1 SOURCE_IOS=1 NO_MEMOVERRIDE_NEW_DELETE=1)
 target_link_libraries(port_source_loader PUBLIC port_module_registry)
+file(GLOB GMOD_MENU_LUA "${CMAKE_SOURCE_DIR}/resources/lua/port/*.lua")
+set_source_files_properties(${GMOD_MENU_LUA} PROPERTIES MACOSX_PACKAGE_LOCATION Resources/portlua)
 file(GLOB GMOD_APP_ICONS "${CMAKE_SOURCE_DIR}/app/icons/*.png")
 set_source_files_properties(${GMOD_APP_ICONS} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 file(GLOB GMOD_TOUCH_TEXTURES "${CMAKE_SOURCE_DIR}/resources/touch/*.vtf")
-add_executable(GModPort MACOSX_BUNDLE app/ios_main.mm ${GMOD_APP_ICONS} "${SOURCE_MODULE_TABLE}" resources/gameinfo.txt resources/touch_default.cfg resources/gmp_bindings.cfg resources/gmp_graphics.cfg resources/gmp_gamepad.cfg resources/gmp_micro.cfg resources/gmp_micro_gamepad.cfg resources/weapon_physgun.txt resources/gmod_tool.txt resources/DebugOptions.txt resources/ui/GameMenu.res resources/ui/GameLogo.res ${GMOD_TOUCH_TEXTURES})
+add_executable(GModPort MACOSX_BUNDLE app/ios_main.mm ${GMOD_APP_ICONS} ${GMOD_MENU_LUA} "${SOURCE_MODULE_TABLE}" resources/gameinfo.txt resources/touch_default.cfg resources/gmp_bindings.cfg resources/gmp_graphics.cfg resources/gmp_gamepad.cfg resources/gmp_micro.cfg resources/gmp_micro_gamepad.cfg resources/weapon_physgun.txt resources/gmod_tool.txt resources/DebugOptions.txt resources/ui/GameMenu.res resources/ui/GameLogo.res ${GMOD_TOUCH_TEXTURES})
 set_source_files_properties(app/ios_main.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 set_source_files_properties(resources/gameinfo.txt resources/touch_default.cfg resources/gmp_bindings.cfg resources/gmp_graphics.cfg resources/gmp_gamepad.cfg resources/gmp_micro.cfg resources/gmp_micro_gamepad.cfg resources/weapon_physgun.txt resources/gmod_tool.txt resources/DebugOptions.txt resources/ui/GameMenu.res resources/ui/GameLogo.res PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 set_source_files_properties(${GMOD_TOUCH_TEXTURES} PROPERTIES MACOSX_PACKAGE_LOCATION Resources/touch)
@@ -68,7 +70,7 @@ if(GMOD_USE_ANGLE)
   target_link_libraries(GModPort PRIVATE "${GMOD_ANGLE_ROOT}/lib/libANGLEComplete.a" "-framework IOSurface")
   message(STATUS "Renderer: ANGLE GLES3 over Metal")
 endif()
-target_link_libraries(GModPort PRIVATE "-framework WebKit" "-framework UIKit" "-framework Foundation" "-framework QuartzCore"
+target_link_libraries(GModPort PRIVATE "-framework ImageIO" "-framework WebKit" "-framework UIKit" "-framework Foundation" "-framework QuartzCore"
   "-framework OpenGLES" "-framework AVFoundation" "-framework AudioToolbox" "-framework CoreAudio"
   "-framework CoreMotion" "-framework GameController" "-framework Metal" "-framework CoreHaptics"
   "-framework CoreGraphics" "-framework CoreText" "-framework Security" "-framework SystemConfiguration"

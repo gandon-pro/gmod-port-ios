@@ -320,6 +320,12 @@ int main(int, char**) {
             // GMod-style main menu (GameUI): entries and the logo panel (materials/gmp/logo in the port pack).
             @[resource(@"GameMenu.res"), [ui stringByAppendingPathComponent:@"GameMenu.res"]],
             @[resource(@"GameLogo.res"), [ui stringByAppendingPathComponent:@"GameLogo.res"]]]];
+        NSString* portLua = [game stringByAppendingPathComponent:@"lua/port"];
+        [fm createDirectoryAtPath:portLua withIntermediateDirectories:YES attributes:nil error:nil];
+        NSString* portLuaSource = resource(@"portlua");
+        for (NSString* name in [fm contentsOfDirectoryAtPath:portLuaSource error:nil])
+            if ([name.pathExtension isEqualToString:@"lua"])
+                [copies addObject:@[[portLuaSource stringByAppendingPathComponent:name], [portLua stringByAppendingPathComponent:name]]];
         NSString* touchSource = resource(@"touch");
         for (NSString* name in [fm contentsOfDirectoryAtPath:touchSource error:nil])
             if ([name.pathExtension isEqualToString:@"vtf"])
