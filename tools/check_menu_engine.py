@@ -20,7 +20,12 @@ with tempfile.TemporaryDirectory() as tmp:
                          ('game/server',['game/shared/hl2mp/weapon_physcannon.cpp'])]:
         module=next(p for p in projects if p['folder']==folder and p['kind']=='module')
         flags=list(base)
-        for inc in module['includes']+[str(engine/'common'),str(root/'deps/sdl/include'),str(root/'build-gluavm/ios-arm64/include')]:flags+=['-I',inc]
+        dependency_includes=[]
+        if 'SDL2' in module.get('use',[]):
+            dependency_includes.append(str(root/'deps/sdl/include'))
+        if 'GLUAVM' in module.get('use',[]):
+            dependency_includes.append(str(root/'build-gluavm/ios-arm64/include'))
+        for inc in module['includes']+[str(engine/'common')]+dependency_includes:flags+=['-I',inc]
         for define in module['defines']:
             if define not in ('PROTECTED_THINGS_ENABLE','USE_BREAKPAD_HANDLER'):flags+=['-D'+define]
         for file in files:
