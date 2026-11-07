@@ -19,8 +19,9 @@
   source lists при наличии, но не изменяется средствами этого проекта.
 
 Работа над native GLua и HTML описана в [docs/NATIVE_GLUA_HTML.md](docs/NATIVE_GLUA_HTML.md).
-Оригинальные Lua-меню пока не запускаются: недостающие привязки движка фиксирует
-bootstrap probe. Зелёный preflight проверяет транспорт и VM, а не готовность меню.
+Главное меню подключено через неизменённые `mainmenu.lua`, `getmaps.lua` и HTML Facepunch.
+Проверяются callbacks, локализация и команды выбора карты; запуск на iPhone ещё требует
+проверки. Полный GLua, Q-меню и Steam/Workshop API остаются незавершёнными.
 
 ## Сборка G1
 
