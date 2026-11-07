@@ -35,6 +35,7 @@ jobs:
           python3 tools/bootstrap.py --only engine --only sdl
           python3 tools/patch_engine.py deps/engine
           python3 tests/test_menu_visibility.py deps/engine/gameui/BasePanel.cpp
+          python3 tests/test_render_diagnostics.py
           python3 tools/check_menu_engine.py
       - name: Rebuild interpreter for host tests
         run: |

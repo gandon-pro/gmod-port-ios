@@ -5,6 +5,7 @@
 #include <EGL/eglext.h>
 #include <EGL/eglext_angle.h>
 #include <cstdio>
+#include <cstring>
 
 namespace gmp_angle {
 namespace {
@@ -13,6 +14,7 @@ EGLSurface surface=EGL_NO_SURFACE;
 EGLConfig config=nullptr;
 struct Context { EGLContext handle; EGLSurface target; bool ownsSurface; };
 SDL_MetalView view=nullptr;
+bool surfaceInfoLogged=false;
 thread_local char error[256]{};
 bool Fail(const char* operation) {
     std::snprintf(error,sizeof(error),"%s failed (EGL 0x%04x)",operation,eglGetError());
@@ -26,7 +28,7 @@ void Shutdown() {
         if (surface!=EGL_NO_SURFACE) eglDestroySurface(display,surface);
         eglTerminate(display);
     }
-    surface=EGL_NO_SURFACE; display=EGL_NO_DISPLAY; config=nullptr;
+    surface=EGL_NO_SURFACE; display=EGL_NO_DISPLAY; config=nullptr; surfaceInfoLogged=false;
     if (view) SDL_Metal_DestroyView(view);
     view=nullptr;
 }
@@ -69,7 +71,26 @@ void* CreateContext(void* share) {
 bool MakeCurrent(void* context) {
     Context* ctx=static_cast<Context*>(context);
     const EGLSurface target=ctx?ctx->target:EGL_NO_SURFACE;
-    return eglMakeCurrent(display,target,target,ctx?ctx->handle:EGL_NO_CONTEXT) || Fail("eglMakeCurrent");
+    if (!eglMakeCurrent(display,target,target,ctx?ctx->handle:EGL_NO_CONTEXT)) return Fail("eglMakeCurrent");
+    if (ctx && !ctx->ownsSurface && !surfaceInfoLogged) {
+        surfaceInfoLogged=true;
+        EGLint red=0,green=0,blue=0,alpha=0,colorspace=0;
+        eglGetConfigAttrib(display,config,EGL_RED_SIZE,&red);
+        eglGetConfigAttrib(display,config,EGL_GREEN_SIZE,&green);
+        eglGetConfigAttrib(display,config,EGL_BLUE_SIZE,&blue);
+        eglGetConfigAttrib(display,config,EGL_ALPHA_SIZE,&alpha);
+        const char* extensions=eglQueryString(display,EGL_EXTENSIONS);
+        const char* found=extensions?std::strstr(extensions,"EGL_KHR_gl_colorspace"):nullptr;
+        const bool hasColorspace=found && (found==extensions || found[-1]==' ') &&
+            (found[21]==' ' || found[21]=='\0');
+        const bool queried=hasColorspace && eglQuerySurface(display,surface,EGL_GL_COLORSPACE_KHR,&colorspace)==EGL_TRUE;
+        SDL_Log("GMP EGL: surface_rgba_bits=%d,%d,%d,%d colorspace_query=%s colorspace=0x%04x (%s)",
+            red,green,blue,alpha,queried?"ok":"unavailable",colorspace,
+            !queried?"unknown":colorspace==EGL_GL_COLORSPACE_SRGB_KHR?"sRGB":colorspace==EGL_GL_COLORSPACE_LINEAR_KHR?"linear":"other");
+        // A rejected optional query must not leave a stale EGL error for later diagnostics.
+        if (hasColorspace && !queried) eglGetError();
+    }
+    return true;
 }
 void DestroyContext(void* context) {
     Context* ctx=static_cast<Context*>(context);

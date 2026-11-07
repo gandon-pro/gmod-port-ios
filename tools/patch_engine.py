@@ -155,6 +155,23 @@ change('materialsystem/shaderapidx9/shaderdevicedx8.cpp',
 change('appframework/sdlmgr.cpp', '\tretval = SDL_GL_GetProcAddress(fn);',
        '#if defined(SOURCE_IOS)\n\textern void* GModPort_GLProcAddress(const char* name);\n\tretval = GModPort_GLProcAddress(fn);\n#else\n\tretval = SDL_GL_GetProcAddress(fn);\n#endif')
 
+# Observe the real sampler path; do not infer sRGB support from an extension warning.
+change('togles/linuxwin/glmgr.cpp',
+       '\tGLMDebugPrintf( "GL sampler object usage: %s\\n", m_bUseSamplerObjects ? "ENABLED" : "DISABLED" );',
+       '\tGLMDebugPrintf( "GL sampler object usage: %s\\n", m_bUseSamplerObjects ? "ENABLED" : "DISABLED" );\n'
+       '#if defined(SOURCE_IOS)\n'
+       '\tMsg( "GMP sRGB: decode_ext=%d sampler_objects=%d texture_backing=%d read_state_fallback=compiled_out\\n",\n'
+       '\t\tgGL->m_bHave_GL_EXT_texture_sRGB_decode, m_bUseSamplerObjects, m_bTexClientStorage );\n'
+       '#endif')
+# Record actual gamma-ramp application, including SDL's reason for a failure.
+change('appframework/sdlmgr.cpp',
+       '\t\tint nResult = SDL_SetWindowGammaRamp( m_Window, pRed, pGreen, pBlue );',
+       '\t\tint nResult = SDL_SetWindowGammaRamp( m_Window, pRed, pGreen, pBlue );\n'
+       '#if defined(SOURCE_IOS)\n'
+       '\t\tConMsg( "GMP gamma: SDL_SetWindowGammaRamp result=%d error=%s requested_mid_rgb=%u,%u,%u\\n",\n'
+       '\t\t\tnResult, nResult ? SDL_GetError() : "none", unsigned(pRed[128]), unsigned(pGreen[128]), unsigned(pBlue[128]) );\n'
+       '#endif')
+
 # OSX is retained for Darwin's low-level platform implementation. Within ToGLES,
 # however, it selects desktop CGL, NSOpenGL and obsolete Mac GL workarounds.
 # iOS uses the renderer's existing SDL/GLES paths instead. Keep the broader

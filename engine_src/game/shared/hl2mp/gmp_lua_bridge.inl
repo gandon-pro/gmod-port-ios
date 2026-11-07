@@ -1,4 +1,5 @@
 // Native GLua states are owned by Source's game-system lifecycle.
+#include "gmp_render_diagnostics.inl"
 #include "igamesystem.h"
 #include "../gmod/glua_runtime.h"
 #include "tier1/utlbuffer.h"
