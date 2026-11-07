@@ -193,6 +193,23 @@ change('materialsystem/shaderapidx9/dynamicvb.h',
        '\t\tWarning("GMP buffer: vertex buffer has no GPU/system storage vertices=%d capacity=%d bytes=%d dynamic=%d\\n", numVerts, m_VertexCount, m_nBufferSize, m_bDynamic);\n'
        '\t\treturn 0;\n\t}')
 
+# Report the early lock failures too; they otherwise bypass glMapBufferRange.
+change('togles/linuxwin/cglmbuffer.cpp',
+       '\tif ( m_bMapped )\n\t{\n\t\tDXABSTRACT_BREAK_ON_ERROR();\n\t\treturn;\n\t}',
+       '\tif ( m_bMapped )\n\t{\n'
+       '\t\tWarning("GMP buffer: lock rejected: already locked handle=%u offset=%u requested=%u\\n", m_nHandle, pParams->m_nOffset, pParams->m_nSize);\n'
+       '\t\tDXABSTRACT_BREAK_ON_ERROR();\n\t\treturn;\n\t}')
+change('togles/linuxwin/cglmbuffer.cpp',
+       '\tif ( pParams->m_nOffset >= m_nSize )\n\t{\n\t\tDXABSTRACT_BREAK_ON_ERROR();\n\t\treturn;\n\t}',
+       '\tif ( pParams->m_nOffset >= m_nSize )\n\t{\n'
+       '\t\tWarning("GMP buffer: lock rejected: offset outside storage handle=%u offset=%u capacity=%u\\n", m_nHandle, pParams->m_nOffset, m_nSize);\n'
+       '\t\tDXABSTRACT_BREAK_ON_ERROR();\n\t\treturn;\n\t}')
+change('togles/linuxwin/cglmbuffer.cpp',
+       '\tif ( ( pParams->m_nOffset + pParams->m_nSize ) > m_nSize)\n\t{\n\t\tDXABSTRACT_BREAK_ON_ERROR();\n\t\treturn;\n\t}',
+       '\tif ( pParams->m_nSize > m_nSize - pParams->m_nOffset )\n\t{\n'
+       '\t\tWarning("GMP buffer: lock rejected: range outside storage handle=%u offset=%u requested=%u capacity=%u\\n", m_nHandle, pParams->m_nOffset, pParams->m_nSize, m_nSize);\n'
+       '\t\tDXABSTRACT_BREAK_ON_ERROR();\n\t\treturn;\n\t}')
+
 # Observe the real sampler path; do not infer sRGB support from an extension warning.
 change('togles/linuxwin/glmgr.cpp',
        '\tGLMDebugPrintf( "GL sampler object usage: %s\\n", m_bUseSamplerObjects ? "ENABLED" : "DISABLED" );',
