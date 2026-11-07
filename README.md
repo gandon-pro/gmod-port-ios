@@ -18,6 +18,10 @@
 - Код Aero в game/client/gmod, game/server/gmod и game/shared/gmod включается в
   source lists при наличии, но не изменяется средствами этого проекта.
 
+Работа над native GLua и HTML описана в [docs/NATIVE_GLUA_HTML.md](docs/NATIVE_GLUA_HTML.md).
+Оригинальные Lua-меню пока не запускаются: недостающие привязки движка фиксирует
+bootstrap probe. Зелёный preflight проверяет транспорт и VM, а не готовность меню.
+
 ## Сборка G1
 
 Workflow `G1 Source iOS`: macos-14, ручной запуск или push main. Сначала host-test

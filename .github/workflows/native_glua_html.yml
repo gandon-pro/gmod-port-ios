@@ -26,8 +26,9 @@ jobs:
             platform/html/html_panel.mm
       - name: Rebuild interpreter for host tests
         run: |
+          export MACOSX_DEPLOYMENT_TARGET=11.0
           make -C deps/luajit clean
-          MACOSX_DEPLOYMENT_TARGET=11.0 make -C deps/luajit -j3 DEFAULT_CC=clang \
+          make -C deps/luajit -j3 DEFAULT_CC=clang \
             BUILDMODE=static XCFLAGS="-DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI"
       - name: Build and test runtime
         run: |
