@@ -199,7 +199,11 @@ function port.MenuTick()
                     for _,js in ipairs(p.javascript) do native('HTMLCall',p.handle,js) end
                     p.javascript={}
                     if p.OnDocumentReady then p:OnDocumentReady() end
-                elseif name=='_gmp.Error' or name=='_gmp.ResourceError' then report(json)
+                elseif name=='_gmp.Error' then report(json)
+                elseif name=='_gmp.ResourceError' then
+                    local ok,packet=pcall(JSON.decode,json)
+                    local kind=ok and packet.args and packet.args[2]
+                    if kind=='SCRIPT' or kind=='LINK' then report(json) else native('Log','HTML image asset: '..json) end
                 else
                     local fn=p.callbacks[name]
                     if fn then
@@ -208,10 +212,14 @@ function port.MenuTick()
                             local args=packet.args
                             local argc=#args
                             for i=1,#args do if args[i]==JSON.null then args[i]=nil end end
-                            local result={pcall(fn,unpack(args,1,argc))};local success=table.remove(result,1)
-                            if success then
-                                if packet.request and packet.request~=JSON.null then native('HTMLReply',p.handle,packet.request,JSON.encode(result)) end
-                            else report(result[1]) end
+                            local results,count=table.Pack(pcall(fn,unpack(args,1,argc)))
+                            if results[1] then
+                                if packet.request and packet.request~=JSON.null then
+                                    local values={}
+                                    for i=2,count do values[i-1]=results[i]==nil and JSON.null or results[i] end
+                                    native('HTMLReply',p.handle,packet.request,JSON.encode(values))
+                                end
+                            else report(results[2]) end
                         else report('Malformed HTML callback packet') end
                     end
                 end

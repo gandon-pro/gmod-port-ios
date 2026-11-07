@@ -114,6 +114,10 @@ private:
         if(!strcmp(op,"Command")){
             const char *name=luaL_checkstring(L,2);
             if(!GMP_MenuName(name))return luaL_error(L,"Invalid console command name");
+            if(!strcmp(name,"gmod_language")){
+                const char *value=luaL_checkstring(L,3);if(!GMP_MenuName(value))return luaL_error(L,"Invalid language name");
+                gmp_menu_language.SetValue(value);return 0;
+            }
             if(!strcmp(name,"gamemode")){if(strcmp(luaL_checkstring(L,3),"sandbox"))return luaL_error(L,"Only native sandbox is implemented");return 0;}
             if(!strcmp(name,"map")){
                 const char *map=luaL_checkstring(L,3);if(!GMP_MenuName(map))return luaL_error(L,"Invalid map name");

@@ -38,7 +38,7 @@ static const char kGMPHTMLBridge[] = R"GMPJS(
         var target = event.target;
         window.webkit.messageHandlers.gmp.postMessage({
             name: event.message ? '_gmp.Error' : '_gmp.ResourceError',
-            args: [event.message || target.src || target.href || 'Resource failure']
+            args: [event.message || target.src || target.href || 'Resource failure', event.message ? 'JS' : target.tagName]
         });
     }, true);
     window.__gmpViewport = function (width) {

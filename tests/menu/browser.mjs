@@ -3,7 +3,7 @@ import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { createServer } from 'node:http';
-import { readFile, mkdir } from 'node:fs/promises';
+import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 
@@ -31,12 +31,13 @@ const server=createServer(async(req,res)=>{
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const browser=await chromium.launch({headless:true,executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH||undefined});
 console.log('Browser:',browser.version());
-let page,chain=Promise.resolve();const errors=[],commands=[];
+let page,chain=Promise.resolve();const errors=[],commands=[],resources=[];
 try{
   const context=await browser.newContext({viewport:{width:1280,height:720},userAgent:'Valve Source Client GModPort browser smoke'});
   page=await context.newPage();
   page.on('pageerror',e=>errors.push(e.message));
   await page.exposeBinding('__gmpTestSend',(_source,name,packet)=>{
+    if(name==='_gmp.ResourceError')resources.push(packet.args);
     chain=chain.then(async()=>{
       host.stdin.write(name+'\t'+JSON.stringify(packet)+'\n');
       const response=await next();
@@ -64,17 +65,18 @@ try{
   await page.goto(`http://127.0.0.1:${server.address().port}/html/menu.html`);
   await page.getByText('Start New Game',{exact:true}).waitFor();
   assert.equal(await page.evaluate(()=>IN_ENGINE),true);
-  assert.equal(await page.evaluate(()=>gScope.Gamemode),'sandbox');
+  await page.waitForFunction(()=>gScope.Gamemode==='sandbox');
   await page.screenshot({path:path.join(artifact,'main-menu.png')});
   await page.getByText('Start New Game',{exact:true}).click();
   await page.locator('.mapicon').filter({hasText:'gm_construct'}).waitFor();
-  await page.locator('.mapicon').filter({hasText:'gm_construct'}).click();
+  await page.locator('.mapicon').filter({hasText:'gm_construct'}).locator('.thumbnail').click();
   await page.screenshot({path:path.join(artifact,'new-game.png')});
   await page.getByRole('button',{name:'Start Game',exact:true}).click();
   await page.waitForTimeout(600);
   await chain;
   assert(commands.includes('map gm_construct'),JSON.stringify(commands));
   assert.equal(errors.length,0,JSON.stringify(errors));
+  await writeFile(path.join(artifact,'result.json'),JSON.stringify({browser:browser.version(),commands,errors,missingFixtureAssets:resources},null,2));
   console.log('PASS: original HTML, localization callbacks, installed-map selection and real Lua map command');
 }finally{
   host.stdin.end();await browser.close();server.close();
