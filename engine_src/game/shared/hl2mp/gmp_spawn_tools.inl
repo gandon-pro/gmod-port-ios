@@ -36,8 +36,8 @@ public:
   m_Label=new vgui::Label(this,"Label",spec.label);m_Label->SetFgColor(Color(20,20,20,255));m_Label->SetMouseInputEnabled(false);
   if(spec.kind=='b'){m_Check=new vgui::CheckButton(this,"Check",spec.label);m_Check->SetFgColor(Color(20,20,20,255));m_Check->AddActionSignalTarget(this);m_Label->SetVisible(false);}
   else if(spec.kind=='s'){
-   m_Choice=new vgui::ComboBox(this,"Choice",10,false);char choices[4096];Q_strncpy(choices,spec.choices?spec.choices:"",sizeof(choices));char *save=NULL;
-   for(char *part=strtok_r(choices,"|",&save);part;part=strtok_r(NULL,"|",&save)){char *caption=strchr(part,'=');if(caption)*caption++=0;else caption=part;KeyValues kv("choice");kv.SetString("value",part);m_Choice->AddItem(caption,&kv);}
+   m_Choice=new vgui::ComboBox(this,"Choice",10,false);char value[MAX_PATH],caption[MAX_PATH];
+   for(int i=0;GMP_ChoiceAt(spec.choices,i,value,sizeof(value),caption,sizeof(caption));++i){KeyValues *kv=new KeyValues("choice");kv->SetString("value",value);m_Choice->AddItem(caption,kv);kv->deleteThis();}
    m_Choice->AddActionSignalTarget(this);
   }else{
    m_Text=new CGMPQTextEntry(this,"Value");m_Text->AddActionSignalTarget(this);
