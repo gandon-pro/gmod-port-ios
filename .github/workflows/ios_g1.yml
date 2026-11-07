@@ -47,6 +47,13 @@ jobs:
           ctest --test-dir build-host --output-on-failure
       - name: Fetch pinned dependencies
         run: python3 tools/bootstrap.py
+      - name: Build the native GLua interpreter for iPhone
+        run: bash gluavm/build_ios.sh
+      - name: Type-check the native HTML bridge with iPhone SDK
+        run: |
+          xcrun --sdk iphoneos clang++ -std=c++17 -fobjc-arc -fsyntax-only \
+            -target arm64-apple-ios15.0 -isysroot "$(xcrun --sdk iphoneos --show-sdk-path)" \
+            platform/html/html_panel.mm
       - name: Test Source interface registrations and loader
         run: |
           cmake -S . -B build-host -DGMOD_BUILD_ENGINE=OFF -DSOURCE_ENGINE_HEADERS="$PWD/deps/engine" -DCMAKE_BUILD_TYPE=Debug

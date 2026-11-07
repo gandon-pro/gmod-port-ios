@@ -1,0 +1,55 @@
+name: Native GLua and HTML preflight
+on:
+  push:
+    branches: [native-glua-html]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: native-glua-html-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-preflight:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned VM and original Lua
+        run: python3 tools/bootstrap.py --only luajit --only garrysmod
+      - name: Build iPhone interpreter and check its platform
+        run: bash gluavm/build_ios.sh
+      - name: Check HTML bridge with iPhone SDK
+        run: |
+          xcrun --sdk iphoneos clang++ -std=c++17 -fobjc-arc -fsyntax-only \
+            -target arm64-apple-ios15.0 -isysroot "$(xcrun --sdk iphoneos --show-sdk-path)" \
+            platform/html/html_panel.mm
+      - name: Rebuild interpreter for host tests
+        run: |
+          make -C deps/luajit clean
+          MACOSX_DEPLOYMENT_TARGET=11.0 make -C deps/luajit -j3 DEFAULT_CC=clang \
+            BUILDMODE=static XCFLAGS="-DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI"
+      - name: Build and test runtime
+        run: |
+          cmake -S . -B build-native-host -DGMOD_BUILD_ENGINE=OFF -DGMOD_BUILD_GLUA_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build-native-host --parallel 3
+          ctest --test-dir build-native-host --output-on-failure
+          python3 tests/glua/test_icon_package.py
+      - name: Record original Lua bootstrap readiness
+        run: |
+          mkdir -p artifacts
+          set +e
+          build-native-host/glua_bootstrap_probe deps/garrysmod/garrysmod > artifacts/original-bootstrap.jsonl
+          status=$?
+          set -e
+          cat artifacts/original-bootstrap.jsonl
+          echo "Original bootstrap exit status: $status (1 means missing bindings)"
+          if [ "$status" -gt 1 ]; then exit "$status"; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-glua-html-preflight
+          path: |
+            artifacts/original-bootstrap.jsonl
+            build-gluavm/ios-arm64/
+          if-no-files-found: ignore

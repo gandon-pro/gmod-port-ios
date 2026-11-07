@@ -21,7 +21,7 @@ table=[]
 externs=[]
 module_targets=[]
 names={p['target']:ident(p['target']) for p in projects}
-external={'SDL2':'SDL2::SDL2-static','FT2':'ios_freetype','FC':'ios_fontconfig',
+external={'GLUAVM':'gluavm','SDL2':'SDL2::SDL2-static','FT2':'ios_freetype','FC':'ios_fontconfig',
           'JPEG':'ios_jpeg','PNG':'ios_png','CURL':'ios_curl','OPENAL':'ios_openal',
           'BZ2':'bz2','ZLIB':'z','M':'m','ICONV':'iconv'}
 ignored={'DL','LOG','RT','UNWIND','ANDROID_SUPPORT'}

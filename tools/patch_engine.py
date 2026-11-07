@@ -484,6 +484,15 @@ change(path, '\t\t\theight = scheme()->GetProportionalScaledValue( height );\n',
        '\t\theight = MAX( height, screenTall / 14 );\n')
 change(path, '\tif( !bFoundServerBrowser && !ModInfo().IsSinglePlayerOnly() )',
        '\tif( false && !bFoundServerBrowser && !ModInfo().IsSinglePlayerOnly() )')
+# Native Lua lifecycle; unsupported original bindings fail with a concrete Lua error.
+change('game/shared/hl2mp/weapon_physcannon.cpp', '#include "gmp_physgun.inl"',
+       '#include "gmp_physgun.inl"\n#include "gmp_lua_bridge.inl"')
+change('gameui/BasePanel.cpp', 'void CBasePanel::RunFrame()\n{',
+       '#include "gmp_lua_menu.inl"\n\nvoid CBasePanel::RunFrame()\n{\n\ts_GMPMenuLua.Tick();')
+
+change('gameui/GameUI_Interface.cpp', 'void CGameUI::Shutdown()\n{',
+       'extern void GMP_ShutdownMenuLua();\nvoid CGameUI::Shutdown()\n{\n\tGMP_ShutdownMenuLua();')
+
 # The open spawn menu (gmp_physgun.inl) takes the touches; without this, scrolling it turns the camera.
 path='game/client/cdll_client_int.cpp'
 change(path, 'void CHLClient::IN_TouchEvent( int type, int fingerId, int x, int y )\n'
