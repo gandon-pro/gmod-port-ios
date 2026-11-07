@@ -160,17 +160,56 @@ change('togles/linuxwin/glmgr.cpp',
        '\tGLMDebugPrintf( "GL sampler object usage: %s\\n", m_bUseSamplerObjects ? "ENABLED" : "DISABLED" );',
        '\tGLMDebugPrintf( "GL sampler object usage: %s\\n", m_bUseSamplerObjects ? "ENABLED" : "DISABLED" );\n'
        '#if defined(SOURCE_IOS)\n'
-       '\tMsg( "GMP sRGB: decode_ext=%d sampler_objects=%d texture_backing=%d read_state_fallback=compiled_out\\n",\n'
+       '\tMsg( "GMP sRGB: decode_ext=%d sampler_objects=%d texture_backing=%d read_state_fallback=texture_reupload\\n",\n'
        '\t\tgGL->m_bHave_GL_EXT_texture_sRGB_decode, m_bUseSamplerObjects, m_bTexClientStorage );\n'
        '#endif')
 # Record actual gamma-ramp application, including SDL's reason for a failure.
 change('appframework/sdlmgr.cpp',
        '\t\tint nResult = SDL_SetWindowGammaRamp( m_Window, pRed, pGreen, pBlue );',
+       '#if defined(SOURCE_IOS) && defined(GMP_USE_ANGLE)\n'
+       '\t\textern int GMPAngleGammaRamp(const uint16 *, const uint16 *, const uint16 *);\n'
+       '\t\tint nResult = GMPAngleGammaRamp( pRed, pGreen, pBlue );\n'
+       '#else\n'
        '\t\tint nResult = SDL_SetWindowGammaRamp( m_Window, pRed, pGreen, pBlue );\n'
+       '#endif\n'
        '#if defined(SOURCE_IOS)\n'
-       '\t\tConMsg( "GMP gamma: SDL_SetWindowGammaRamp result=%d error=%s requested_mid_rgb=%u,%u,%u\\n",\n'
+       '\t\tConMsg( "GMP gamma: ramp submission result=%d error=%s requested_mid_rgb=%u,%u,%u\\n",\n'
        '\t\t\tnResult, nResult ? SDL_GetError() : "none", unsigned(pRed[128]), unsigned(pGreen[128]), unsigned(pBlue[128]) );\n'
        '#endif')
+
+# Keep only the platform-independent texture reupload fallback on iOS. Do not
+# restore desktop CGL/Apple client-storage APIs along with it.
+for path, context, expected in [
+    ('public/togles/linuxwin/cglmtex.h', r'\tvoid\s+HandleSRGBMismatch', 1),
+    ('togles/linuxwin/cglmtex.cpp', r'\nvoid CGLMTex::HandleSRGBMismatch', 1),
+    ('togles/linuxwin/glmgr_flush.inl', r'\t+(?:CGLMTex \*pTex = m_samplers|if\( pTex && !\( gGL->m_bHave_GL_EXT_texture_sRGB_decode)', 2),
+]:
+    file=root/path
+    text=file.read_text(encoding='utf-8')
+    text, count=re.subn(r'^#if[^\n]*\bOSX\b[^\n]*\n(?='+context+r')',
+        '#if defined(OSX) || defined(SOURCE_IOS) // GModPort sRGB texture fallback\n', text, flags=re.M)
+    if count != expected: raise SystemExit('Unexpected sRGB fallback guard: '+path)
+    if text != file.read_text(encoding='utf-8'):
+        file.write_text(text,encoding='utf-8',newline='\n');changes.append(path)
+
+# Avoid the legacy Mac debug/stack-crawl code and require retained texels before
+# changing a texture's storage format. Render targets are never reallocated here.
+change('togles/linuxwin/cglmtex.cpp',
+       'void CGLMTex::HandleSRGBMismatch( bool srgb, int &srgbFlipCount )\n{',
+       'void CGLMTex::HandleSRGBMismatch( bool srgb, int &srgbFlipCount )\n{\n'
+       '#if defined(SOURCE_IOS)\n'
+       '\tif ( !m_layout->m_format->m_glIntFormatSRGB || (m_layout->m_key.m_texFlags & kGLMTexRenderable) ) return;\n'
+       '\tif ( !m_backing )\n'
+       '\t{\n'
+       '\t\tstatic bool warned = false;\n'
+       '\t\tif ( !warned ) { Warning("GMP sRGB: cannot reupload texture without retained texels\\n"); warned = true; }\n'
+       '\t\treturn;\n'
+       '\t}\n'
+       '\tif ( ((m_layout->m_key.m_texFlags & kGLMTexSRGB) != 0) != srgb )\n'
+       '\t{ ++srgbFlipCount; ResetSRGB(srgb, false); }\n'
+       '#else\n')
+change('togles/linuxwin/cglmtex.cpp', '}\n\n\nvoid CGLMTex::ResetSRGB',
+       '#endif // SOURCE_IOS\n}\n\n\nvoid CGLMTex::ResetSRGB')
 
 # OSX is retained for Darwin's low-level platform implementation. Within ToGLES,
 # however, it selects desktop CGL, NSOpenGL and obsolete Mac GL workarounds.

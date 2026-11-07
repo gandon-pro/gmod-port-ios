@@ -93,3 +93,24 @@ jobs:
           name: html-ios-simulator
           path: artifacts/ios-html/
           if-no-files-found: ignore
+
+  color-gles:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LIBGL_ALWAYS_SOFTWARE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Mesa EGL and GLES3 development files
+        run: sudo apt-get update && sudo apt-get install -y libegl1-mesa-dev libgles2-mesa-dev
+      - name: Test production presentation gamma on real GLES3
+        run: |
+          c++ -std=c++17 -Wall -Wextra -Werror -pthread -Iplatform/angle \
+            tests/gamma_gpu_test.cpp platform/angle/gamma_pass.cpp -lEGL -lGLESv2 -o gamma-gpu-test
+          ./gamma-gpu-test
+      - name: Fetch and patch the pinned Source engine
+        run: |
+          python3 tools/bootstrap.py --only engine
+          python3 tools/patch_engine.py deps/engine
+      - name: Test production Source sRGB fallback on real GLES3
+        run: python3 tests/test_srgb_gpu.py deps/engine

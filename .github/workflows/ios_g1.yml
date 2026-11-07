@@ -99,7 +99,7 @@ jobs:
           xcrun --sdk iphoneos clang++ -std=c++17 -fsyntax-only -target arm64-apple-ios15.0 \
             -isysroot "$(xcrun --sdk iphoneos --show-sdk-path)" \
             -I build-deps/install/include/SDL2 -I build-deps/angle/include \
-            -DANGLE_STATIC=1 -DEGLAPI= -DGL_APICALL= platform/angle/angle_metal.cpp
+            -DANGLE_STATIC=1 -DEGLAPI= -DGL_APICALL= platform/angle/angle_metal.cpp platform/angle/gamma_pass.cpp
       - name: Apply iOS platform patch
         run: python3 tools/patch_engine.py deps/engine
       - name: Configure static Source engine

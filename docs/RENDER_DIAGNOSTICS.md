@@ -1,7 +1,8 @@
 # Gamma, sRGB and HDR diagnosis
 
-This instrumentation is read-only. It does not raise gamma, force HDR, replace
-textures or alter any rendering state to make a screenshot appear brighter.
+The diagnostic commands remain read-only. The presentation path now applies
+Source's requested per-channel gamma ramp on the GPU, and the iOS texture path
+now restores the existing Source sRGB format-switch fallback. Neither fix forces HDR.
 
 ## Source/build scope
 
@@ -12,7 +13,7 @@ textures or alter any rendering state to make a screenshot appear brighter.
   ANGLE Metal / OpenGL ES 3.0, and no `GL_EXT_texture_sRGB_decode`.
 - No device execution of the new diagnostics has been observed yet.
 
-## Confirmed source findings
+## Findings before the gamma/sRGB fix
 
 1. `CSDLMgr::SetGammaRamp` forwards to `SDL_SetWindowGammaRamp`. The pinned SDL
    UIKit driver never installs `SetWindowGammaRamp`; SDL returns unsupported.
@@ -77,3 +78,44 @@ fixture, testing requested-vs-selected HDR, unavailable values, unchanged CVars,
 load delay and cleanup. The SDK check compiles the real shared client/server
 translation units. Full G1 builds compile the changed SDL/ToGLES/EGL code.
 Neither a fixture nor a successful build supplies actual device measurements.
+
+## Implemented correction
+
+`platform/angle/gamma_pass.cpp` applies the exact 256-entry unsigned-16-bit RGB
+ramp submitted by Source. The ANGLE build routes `CSDLMgr::SetGammaRamp` to this
+GPU pass instead of SDL's unsupported UIKit hardware-gamma entry point. Ramp
+updates are mutex-protected and may precede GL context creation. The pass runs
+on the primary context just before swap, after Source rendering and tone
+mapping. It uses a high-precision float LUT, preserves alpha and touched GL
+state, resolves the final backbuffer to a private texture, resizes with the
+actual drawable and releases objects while the primary context is current.
+An exact identity ramp bypasses the pass. Shader/allocation failures are
+reported and correction is suspended until another ramp update; unsupported
+nonlinear presentation surfaces are explicitly rejected to prevent double
+sRGB encoding. The Apple GLES fallback without ANGLE retains SDL behavior.
+
+The pinned Source `HandleSRGBMismatch`/`ResetSRGB` texture-reupload path is now
+compiled on iOS and invoked from both sampler-object and texture-parameter
+paths. The iOS handler skips render targets and unsupported formats, requires
+retained CPU texels, and reuploads only when the texture encoding differs.
+It uses actual sRGB texture storage, not a gamma multiplier applied to every
+material. Desktop CGL/client-storage APIs remain excluded. As with the upstream
+fallback, simultaneously sampling the same texture through conflicting sRGB
+modes is not solved by storage switching; this would require dual texture
+storage or a shader-level decoding design. Missing CPU backing reports a
+warning instead of attempting an unsafe reupload.
+
+Observed local checks on Mesa llvmpipe GLES3:
+
+- Production gamma pass: per-channel nonlinear/inverted LUTs agree with the
+  reference pixels within one 8-bit output step; alpha is preserved.
+- Identity ramp bypass, resize, release/recreation and touched GL-state
+  restoration pass, including sampler bindings and pixel-unpack state.
+- The actual patched Source texture methods run against real GL uploads in a
+  small context/layout fixture: a stored value of 128 samples as 55 through
+  sRGB decoding and returns to 128 after switching to raw reads. Repeated
+  requests avoid redundant uploads; render targets/missing backing are skipped.
+
+These checks are not an iPhone/ANGLE Metal capture or proof of PC parity.
+After installing the new build, look for `GMP gamma: presentation LUT applied`,
+`read_state_fallback=texture_reupload` and the existing actual HDR snapshot.

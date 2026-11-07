@@ -1,4 +1,5 @@
 #include "angle_metal.h"
+#include "gamma_pass.h"
 #include <SDL.h>
 #include <SDL_metal.h>
 #include <EGL/egl.h>
@@ -15,6 +16,7 @@ EGLConfig config=nullptr;
 struct Context { EGLContext handle; EGLSurface target; bool ownsSurface; };
 SDL_MetalView view=nullptr;
 bool surfaceInfoLogged=false;
+GammaPass gamma;
 thread_local char error[256]{};
 bool Fail(const char* operation) {
     std::snprintf(error,sizeof(error),"%s failed (EGL 0x%04x)",operation,eglGetError());
@@ -24,6 +26,8 @@ bool Fail(const char* operation) {
 const char* Error() { return error; }
 void Shutdown() {
     if (display!=EGL_NO_DISPLAY) {
+        // The primary context is normally current when the engine shuts down.
+        if (eglGetCurrentContext()!=EGL_NO_CONTEXT) gamma.Release();
         eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);
         if (surface!=EGL_NO_SURFACE) eglDestroySurface(display,surface);
         eglTerminate(display);
@@ -96,13 +100,23 @@ void DestroyContext(void* context) {
     Context* ctx=static_cast<Context*>(context);
     if (!ctx) return;
     if (display!=EGL_NO_DISPLAY) {
+        if (!ctx->ownsSurface) {
+            if (eglMakeCurrent(display,ctx->target,ctx->target,ctx->handle)) gamma.Release();
+        }
         if (eglGetCurrentContext()==ctx->handle) MakeCurrent(nullptr);
         eglDestroyContext(display,ctx->handle);
         if (ctx->ownsSurface) eglDestroySurface(display,ctx->target);
     }
     delete ctx;
 }
-bool Present() { return eglSwapBuffers(display,surface) || Fail("eglSwapBuffers"); }
+bool SetGammaRamp(const std::uint16_t* red,const std::uint16_t* green,const std::uint16_t* blue) {
+    return gamma.SetRamp(red,green,blue);
+}
+bool Present() {
+    int w=0,h=0;DrawableSize(&w,&h);
+    if (!gamma.Apply(w,h)) SDL_Log("GMP gamma: GPU pass failed: %s; displaying uncorrected frame",gamma.Error());
+    return eglSwapBuffers(display,surface) || Fail("eglSwapBuffers");
+}
 bool SwapInterval(int interval) { return eglSwapInterval(display,interval) || Fail("eglSwapInterval"); }
 void* ProcAddress(const char* name) { return reinterpret_cast<void*>(eglGetProcAddress(name)); }
 void DrawableSize(int* width,int* height) {
@@ -134,3 +148,8 @@ int GMPAngleCurrent(SDL_Window*,void* context) { return gmp_angle::MakeCurrent(c
 void GMPAngleSwap(SDL_Window*) { if (!gmp_angle::Present()) SDL_Log("%s",gmp_angle::Error()); }
 int GMPAngleInterval(int interval) { return gmp_angle::SwapInterval(interval)?0:-1; }
 void GMPAngleShutdown() { gmp_angle::Shutdown(); gmpPrimaryContext=nullptr; }
+
+int GMPAngleGammaRamp(const std::uint16_t* red,const std::uint16_t* green,const std::uint16_t* blue) {
+    if (!gmp_angle::SetGammaRamp(red,green,blue)) return SDL_SetError("Null gamma ramp");
+    return 0;
+}

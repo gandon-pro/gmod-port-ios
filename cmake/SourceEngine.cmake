@@ -64,7 +64,7 @@ target_sources(GModPort PRIVATE ${SOURCE_MODULE_OBJECTS} platform/html/html_pane
 set_source_files_properties(platform/html/html_panel.mm platform/image/image_codec.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 add_dependencies(GModPort ${SOURCE_MODULE_OBJECT_TARGETS})
 if(GMOD_USE_ANGLE)
-  target_sources(GModPort PRIVATE platform/angle/angle_metal.cpp)
+  target_sources(GModPort PRIVATE platform/angle/angle_metal.cpp platform/angle/gamma_pass.cpp)
   target_include_directories(GModPort PRIVATE platform "${GMOD_ANGLE_ROOT}/include")
   target_compile_definitions(GModPort PRIVATE ANGLE_STATIC=1 EGLAPI= GL_APICALL=)
   target_link_libraries(GModPort PRIVATE "${GMOD_ANGLE_ROOT}/lib/libANGLEComplete.a" "-framework IOSurface")
