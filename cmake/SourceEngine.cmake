@@ -60,8 +60,8 @@ set_source_files_properties(resources/gameinfo.txt resources/touch_default.cfg r
 set_source_files_properties(${GMOD_TOUCH_TEXTURES} PROPERTIES MACOSX_PACKAGE_LOCATION Resources/touch)
 target_link_libraries(GModPort PRIVATE port_source_loader port_module_registry SDL2::SDL2main SDL2::SDL2-static ${SOURCE_EXTERNAL_TARGETS})
 set_source_files_properties(${SOURCE_MODULE_OBJECTS} PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
-target_sources(GModPort PRIVATE ${SOURCE_MODULE_OBJECTS} platform/html/html_panel.mm)
-set_source_files_properties(platform/html/html_panel.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+target_sources(GModPort PRIVATE ${SOURCE_MODULE_OBJECTS} platform/html/html_panel.mm platform/image/image_codec.mm)
+set_source_files_properties(platform/html/html_panel.mm platform/image/image_codec.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 add_dependencies(GModPort ${SOURCE_MODULE_OBJECT_TARGETS})
 if(GMOD_USE_ANGLE)
   target_sources(GModPort PRIVATE platform/angle/angle_metal.cpp)
@@ -70,7 +70,7 @@ if(GMOD_USE_ANGLE)
   target_link_libraries(GModPort PRIVATE "${GMOD_ANGLE_ROOT}/lib/libANGLEComplete.a" "-framework IOSurface")
   message(STATUS "Renderer: ANGLE GLES3 over Metal")
 endif()
-target_link_libraries(GModPort PRIVATE "-framework ImageIO" "-framework WebKit" "-framework UIKit" "-framework Foundation" "-framework QuartzCore"
+target_link_libraries(GModPort PRIVATE "-framework CoreGraphics" "-framework ImageIO" "-framework WebKit" "-framework UIKit" "-framework Foundation" "-framework QuartzCore"
   "-framework OpenGLES" "-framework AVFoundation" "-framework AudioToolbox" "-framework CoreAudio"
   "-framework CoreMotion" "-framework GameController" "-framework Metal" "-framework CoreHaptics"
   "-framework CoreGraphics" "-framework CoreText" "-framework Security" "-framework SystemConfiguration"

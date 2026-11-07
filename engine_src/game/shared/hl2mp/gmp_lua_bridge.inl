@@ -25,7 +25,11 @@ public:
         // A binding failure must not abort the existing playable Source client.
         return true;
     }
-    void Shutdown() override {if(m_Ready)m_VM->Hook("ShutDown");m_Ready=false;m_VM.reset();}
+    void Shutdown() override {
+#ifdef CLIENT_DLL
+        GMP_QMenuShutdown();
+#endif
+if(m_Ready)m_VM->Hook("ShutDown");m_Ready=false;m_VM.reset();}
     void LevelInitPostEntity() override {if(m_Ready)m_VM->Hook("InitPostEntity");}
 #ifdef CLIENT_DLL
     void Update(float) override {Tick();}

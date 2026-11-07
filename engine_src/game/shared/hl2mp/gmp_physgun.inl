@@ -1113,7 +1113,7 @@ public:
 		BaseClass::PerformLayout();
 		int w, h;
 		GetSize( w, h );
-		m_nCell = MAX( 32, h / 4 );
+		m_nCell = MAX( 64, ScreenHeight() / 8 );
 		m_nGap = m_nCell / 14;
 		const int cols = MAX( 1, ( w - m_nGap ) / ( m_nCell + m_nGap ) );
 		m_nCell = ( w - m_nGap ) / cols - m_nGap;	// fill the width
@@ -1337,12 +1337,14 @@ private:
 	int m_nCell, m_nGap;
 };
 
+#include "gmp_spawn_tools.inl"
+
 class CGMPSpawnMenu : public vgui::EditablePanel
 {
 	DECLARE_CLASS_SIMPLE( CGMPSpawnMenu, vgui::EditablePanel );
 public:
 	CGMPSpawnMenu( vgui::VPANEL parent ) : BaseClass( NULL, "GMPSpawnMenu" ),
-		m_hTabFont( 0 ), m_hListFont( 0 ), m_hHeaderFont( 0 ), m_hLabelFont( 0 ), m_nTab( 0 )
+		m_hTabFont( 0 ), m_hListFont( 0 ), m_hHeaderFont( 0 ), m_hLabelFont( 0 ), m_nTab( 0 ), m_nToolTab(0)
 	{
 		SetParent( parent );
 		// A popup so vgui shows the cursor and gets taps; no keyboard, so the +menu bind still closes it.
@@ -1354,6 +1356,11 @@ public:
 		m_pLists->AddActionSignalTarget( this );
 		m_pGrid = new CGMPSpawnGrid( this );
 		m_pGrid->AddActionSignalTarget( this );
+		m_pTools = new CGMPSpawnTools(this);
+		m_pSearch = new CGMPQTextEntry(this,"Search");
+		m_pSearch->SetText("");static_cast<CGMPQTextEntry *>(m_pSearch)->SetHint("Search name or model...");
+		m_pSearch->AddActionSignalTarget(this);
+		m_pSource = NULL;
 		m_flRefreshAt = 0;
 		SetVisible( false );
 	}
@@ -1362,12 +1369,13 @@ public:
 	{
 		if ( IsVisible() )
 		{
-			SetVisible( false );
+			Close();
 			return;
 		}
 		GMP_LoadSpawnMenu();
 		GMP_LoadNPCMenu();
 		SetBounds( 0, 0, ScreenWidth(), ScreenHeight() );
+		InvalidateLayout(true);
 		SelectTab( m_nTab );
 		SetVisible( true );
 		MoveToFront();
@@ -1380,95 +1388,60 @@ public:
 		if ( !family || !*family )
 			family = "Verdana";
 		const int tall = ScreenHeight();
-		m_hTabFont = MakeFont( family, tall / 34, 700 );
-		m_hListFont = MakeFont( family, tall / 34, 500 );
-		m_hHeaderFont = MakeFont( family, tall / 26, 800 );
-		m_hLabelFont = MakeFont( family, tall / 50, 500 );
+		m_hTabFont = MakeFont( family, MAX(12,tall / 55), 500,m_hTabFont );
+		m_hListFont = MakeFont( family, MAX(12,tall / 50), 500,m_hListFont );
+		m_hHeaderFont = MakeFont( family, MAX(14,tall / 42), 700,m_hHeaderFont );
+		m_hLabelFont = MakeFont( family, MAX(12,tall / 50), 500,m_hLabelFont );
 		m_pLists->SetFonts( m_hListFont, m_hTabFont );
 		m_pGrid->SetFonts( m_hLabelFont, m_hHeaderFont );
+        m_pTools->SetFont(m_hListFont);m_pSearch->SetFont(m_hListFont);
 	}
 
 	virtual void PerformLayout( void )
-	{
-		BaseClass::PerformLayout();
-		int w, h;
-		GetSize( w, h );
-		// Landscape iPhones keep the notch and the home bar out of the side and bottom margins.
-		m_nX0 = w * 6 / 100; m_nX1 = w - w * 6 / 100;
-		m_nY0 = h / 30; m_nY1 = h - h / 20;
-		m_nTabTall = h / 11;
-		const int pad = h / 90;
-		const int top = m_nY0 + m_nTabTall + pad, bottom = m_nY1 - pad;
-		const int listWide = m_nTab == 0 ? ( m_nX1 - m_nX0 ) / 4 : 0;
-		m_pLists->SetVisible( listWide > 0 );
-		m_pLists->SetBounds( m_nX0 + pad, top, listWide, bottom - top );
-		const int gridX = m_nX0 + pad + ( listWide ? listWide + pad : 0 );
-		m_pGrid->SetBounds( gridX, top, m_nX1 - pad - gridX, bottom - top );
-	}
+    {
+        BaseClass::PerformLayout();gmpui::Layout layout(GetWide(),GetTall(),true,1);
+        m_nX0=layout.x;m_nX1=layout.x+layout.width;m_nY0=layout.y;m_nY1=layout.y+layout.height;m_nTabTall=layout.tab;
+        const int pad=4,contentRight=m_nX0+layout.left,top=m_nY0+m_nTabTall+pad;
+        m_nContentRight=contentRight;
+        m_pTools->SetBounds(contentRight+layout.split,top,layout.tools,m_nY1-top);
+        m_pSearch->SetBounds(m_nX0+pad,top,layout.left-pad*2,layout.search);
+        const int gridTop=top+layout.search+pad,listWide=m_nTab==0?layout.tree:0;
+        m_pLists->SetVisible(listWide>0);m_pLists->SetBounds(m_nX0+pad,gridTop,listWide,m_nY1-gridTop-pad);
+        const int gridX=m_nX0+pad+(listWide?listWide+pad:0);
+        m_pGrid->SetBounds(gridX,gridTop,MAX(1,contentRight-pad-gridX),MAX(1,m_nY1-gridTop-pad));
+    }
 
-	virtual void Paint( void )
-	{
-		vgui::surface()->DrawSetColor( 50, 50, 50, 240 );
-		vgui::surface()->DrawFilledRect( m_nX0, m_nY0 + m_nTabTall, m_nX1, m_nY1 );
-		for ( int i = 0; i <= ARRAYSIZE( s_Tabs ) + 1; i++ )
-		{
-			int x0, x1;
-			TabRect( i, x0, x1 );
-			const bool close = i == ARRAYSIZE( s_Tabs );
-			const bool cleanup = i == ARRAYSIZE( s_Tabs ) + 1;
-			const bool active = i == m_nTab || cleanup;
-			if ( close )
-				vgui::surface()->DrawSetColor( 200, 70, 60, 240 );
-			else if ( cleanup )
-				vgui::surface()->DrawSetColor( 60, 110, 170, 240 );
-			else if ( active )
-				vgui::surface()->DrawSetColor( 50, 50, 50, 240 );
-			else
-				vgui::surface()->DrawSetColor( 95, 95, 95, 230 );
-			vgui::surface()->DrawFilledRect( x0, m_nY0 + ( active || close ? 0 : m_nTabTall / 8 ), x1, m_nY0 + m_nTabTall );
-			wchar_t wide[32];
-			g_pVGuiLocalize->ConvertANSIToUnicode( close ? "X" : cleanup ? "Cleanup" : s_Tabs[i], wide, sizeof( wide ) );
-			int tw, th;
-			vgui::surface()->GetTextSize( m_hTabFont, wide, tw, th );
-			vgui::surface()->DrawSetTextFont( m_hTabFont );
-			vgui::surface()->DrawSetTextColor( active || close ? Color( 255, 255, 255, 255 ) : Color( 200, 200, 200, 255 ) );
-			vgui::surface()->DrawSetTextPos( ( x0 + x1 - tw ) / 2, m_nY0 + ( m_nTabTall - th ) / 2 );
-			vgui::surface()->DrawPrintText( wide, wcslen( wide ) );
-		}
-	}
+    virtual void Paint( void )
+    {
+        if(!s_GMPQSkin.Draw("Tab_Control",m_nX0,m_nY0+m_nTabTall-8,m_nContentRight-m_nX0,m_nY1-m_nY0-m_nTabTall+8)){
+            vgui::surface()->DrawSetColor(170,170,170,255);vgui::surface()->DrawFilledRect(m_nX0,m_nY0+m_nTabTall,m_nContentRight,m_nY1);
+        }
+        s_GMPQSkin.Draw("Tab_Control",m_nContentRight+6,m_nY0+m_nTabTall-8,m_nX1-m_nContentRight-6,m_nY1-m_nY0-m_nTabTall+8);
+        for(int i=0;i<ARRAYSIZE(s_Tabs);++i){int x0,x1;TabRect(i,x0,x1);s_GMPQSkin.Draw(i==m_nTab?"TabT_Active":"TabT_Inactive",x0,m_nY0+(i==m_nTab?0:2),x1-x0,m_nTabTall);PaintText(s_Tabs[i],x0,m_nY0,x1-x0,m_nTabTall,Color(25,25,25,255));}
+        const int toolWidth=(m_nX1-m_nContentRight-6)/2;
+        for(int i=0;i<2;++i){int x=m_nContentRight+6+i*toolWidth;s_GMPQSkin.Draw(i==m_nToolTab?"TabT_Active":"TabT_Inactive",x,m_nY0,toolWidth,m_nTabTall);PaintText(i==0?"Tools":"Utilities",x,m_nY0,toolWidth,m_nTabTall,Color(25,25,25,255));}
+        PaintText("X",GetWide()-MAX(24,m_nTabTall),0,MAX(24,m_nTabTall),MAX(24,m_nTabTall),Color(220,70,70,255));
+    }
+    void PaintText(const char *text,int x,int y,int w,int h,Color color){
+        wchar_t wide[128];g_pVGuiLocalize->ConvertANSIToUnicode(text,wide,sizeof(wide));int tw,th;vgui::surface()->GetTextSize(m_hTabFont,wide,tw,th);
+        vgui::surface()->DrawSetTextFont(m_hTabFont);vgui::surface()->DrawSetTextColor(color);vgui::surface()->DrawSetTextPos(x+MAX(0,(w-tw)/2),y+(h-th)/2);vgui::surface()->DrawPrintText(wide,wcslen(wide));
+    }
 
-	virtual void OnMousePressed( vgui::MouseCode code )
-	{
-		int x, y;
-		vgui::input()->GetCursorPos( x, y );
-		ScreenToLocal( x, y );
-		if ( x < m_nX0 || x >= m_nX1 || y < m_nY0 || y >= m_nY1 )
-		{
-			SetVisible( false );	// tap outside closes, like letting go of Q in GMod
-			return;
-		}
-		if ( y >= m_nY0 + m_nTabTall )
-			return;
-		for ( int i = 0; i <= ARRAYSIZE( s_Tabs ) + 1; i++ )
-		{
-			int x0, x1;
-			TabRect( i, x0, x1 );
-			if ( x < x0 || x >= x1 )
-				continue;
-			if ( i == ARRAYSIZE( s_Tabs ) + 1 )
-				engine->ClientCmd_Unrestricted( "gmod_cleanup" );	// GMod's Cleanup: everything you spawned
-			else if ( i == ARRAYSIZE( s_Tabs ) )
-				SetVisible( false );
-			else
-				SelectTab( i );
-			return;
-		}
-	}
+    void Close(){SDL_StopTextInput();SetKeyBoardInputEnabled(false);SetVisible(false);}
+    virtual void OnKeyCodeTyped(vgui::KeyCode code){if(code==KEY_ESCAPE){Close();return;}BaseClass::OnKeyCodeTyped(code);}
+    virtual void OnMousePressed(vgui::MouseCode code)
+    {
+        if(code!=MOUSE_LEFT)return;int x,y;vgui::input()->GetCursorPos(x,y);ScreenToLocal(x,y);
+        if((x>=GetWide()-MAX(24,m_nTabTall)&&y<MAX(24,m_nTabTall))||x<m_nX0||x>=m_nX1||y<m_nY0||y>=m_nY1){Close();return;}
+        if(y>=m_nY0+m_nTabTall)return;
+        if(x>m_nContentRight){m_nToolTab=x<m_nContentRight+6+(m_nX1-m_nContentRight-6)/2?0:1;m_pTools->ShowUtilities(m_nToolTab==1);Repaint();return;}
+        for(int i=0;i<ARRAYSIZE(s_Tabs);++i){int x0,x1;TabRect(i,x0,x1);if(x>=x0&&x<x1){SelectTab(i);return;}}
+    }
 
 	MESSAGE_FUNC_INT( OnSpawnListSelected, "SpawnListSelected", index )
 	{
 		if ( g_GMPSpawnLists.IsValidIndex( index ) )
-			m_pGrid->SetItems( &g_GMPSpawnLists[index]->items );
+			SetSource( &g_GMPSpawnLists[index]->items );
 	}
 
 	// Dupes / Saves: the corner X deletes the file and its .txt.
@@ -1494,6 +1467,8 @@ public:
 	virtual void OnThink( void )
 	{
 		BaseClass::OnThink();
+        if(IsVisible()&&enginevgui->IsGameUIVisible())Close();
+        if(GetWide()!=ScreenWidth()||GetTall()!=ScreenHeight()){SetBounds(0,0,ScreenWidth(),ScreenHeight());InvalidateLayout(true,true);}
 		if ( m_flRefreshAt && Plat_FloatTime() >= m_flRefreshAt )
 		{
 			m_flRefreshAt = 0;
@@ -1511,56 +1486,62 @@ private:
 		m_nTab = tab;
 		switch ( tab )
 		{
-		case TAB_SPAWNLISTS: OnSpawnListSelected( m_pLists->Selected() ); break;
-		case TAB_ENTITIES: m_pGrid->SetItems( &g_GMPEntities ); break;
-		case TAB_WEAPONS: m_pGrid->SetItems( &g_GMPWeapons ); break;
-		case TAB_NPCS: m_pGrid->SetItems( &g_GMPNPCs ); break;
-		case TAB_VEHICLES: m_pGrid->SetItems( &g_GMPVehicleItems ); break;
+		case TAB_SPAWNLISTS: if(g_GMPSpawnLists.Count())OnSpawnListSelected(m_pLists->Selected());else SetSource(NULL);break;
+		case TAB_ENTITIES: SetSource( &g_GMPEntities ); break;
+		case TAB_WEAPONS: SetSource( &g_GMPWeapons ); break;
+		case TAB_NPCS: SetSource( &g_GMPNPCs ); break;
+		case TAB_VEHICLES: SetSource( &g_GMPVehicleItems ); break;
 		case TAB_DUPES:
 			GMP_LoadFileItems( g_GMPDupeItems, "dupes", "dupe", true );
-			m_pGrid->SetItems( &g_GMPDupeItems );
+			SetSource( &g_GMPDupeItems );
 			break;
 		default:
 			GMP_LoadFileItems( g_GMPSaveItems, "saves", "gms", false );
-			m_pGrid->SetItems( &g_GMPSaveItems );
+			SetSource( &g_GMPSaveItems );
 			break;
 		}
 		InvalidateLayout();
 		Repaint();
 	}
 
-	void TabRect( int i, int &x0, int &x1 ) const
-	{
-		// The tabs and Cleanup share what the close button leaves.
-		const int gap = m_nTabTall / 12, count = ARRAYSIZE( s_Tabs ) + 1;
-		const int wide = ( m_nX1 - m_nX0 - m_nTabTall * 3 / 2 - count * gap ) / count;
-		if ( i == ARRAYSIZE( s_Tabs ) )	// close button at the right end
-		{
-			x1 = m_nX1;
-			x0 = m_nX1 - m_nTabTall * 3 / 2;
-			return;
-		}
-		if ( i == ARRAYSIZE( s_Tabs ) + 1 )	// cleanup, left of the close button
-		{
-			x1 = m_nX1 - m_nTabTall * 3 / 2 - gap;
-			x0 = x1 - wide;
-			return;
-		}
-		x0 = m_nX0 + i * ( wide + gap );
-		x1 = x0 + wide;
-	}
+    void SetSource(const CUtlVector<GMPSpawnItem> *items) { m_pSource=items;FilterItems(); }
+    MESSAGE_FUNC(OnSearchChanged,"TextChanged") { FilterItems(); }
+    void FilterItems() {
+        char query[160];m_pSearch->GetText(query,sizeof(query));m_Filtered.RemoveAll();
+        int header=-1;bool added=false;
+        for(int i=0;m_pSource&&i<m_pSource->Count();++i){
+            const GMPSpawnItem &item=(*m_pSource)[i];
+            if(!*query){m_Filtered.AddToTail(item);continue;}
+            if(item.model.IsEmpty()&&item.command.IsEmpty()){header=i;added=false;continue;}
+            if(gmpui::Matches(query,item.text.Get(),item.model.Get())){
+                if(header>=0&&!added){m_Filtered.AddToTail((*m_pSource)[header]);added=true;}
+                m_Filtered.AddToTail(item);
+            }
+        }
+        m_pGrid->SetItems(&m_Filtered);
+    }
 
-	static vgui::HFont MakeFont( const char *family, int tall, int weight )
+
+    void TabRect(int i,int &x0,int &x1)const{
+        const int count=ARRAYSIZE(s_Tabs),width=m_nContentRight-m_nX0;
+        x0=m_nX0+width*i/count;x1=m_nX0+width*(i+1)/count;
+    }
+
+	static vgui::HFont MakeFont( const char *family, int tall, int weight,vgui::HFont font=0 )
 	{
-		vgui::HFont font = vgui::surface()->CreateFont();
+		if(!font)font = vgui::surface()->CreateFont();
 		vgui::surface()->SetFontGlyphSet( font, family, tall, weight, 0, 0, vgui::ISurface::FONTFLAG_ANTIALIAS );
 		return font;
 	}
 
 	CGMPSpawnListPanel *m_pLists;
 	CGMPSpawnGrid *m_pGrid;
+    CGMPSpawnTools *m_pTools;
+    vgui::TextEntry *m_pSearch;
+    const CUtlVector<GMPSpawnItem> *m_pSource;
+    CUtlVector<GMPSpawnItem> m_Filtered;
 	vgui::HFont m_hTabFont, m_hListFont, m_hHeaderFont, m_hLabelFont;
-	int m_nTab, m_nX0, m_nX1, m_nY0, m_nY1, m_nTabTall;
+	int m_nTab,m_nToolTab,m_nContentRight, m_nX0, m_nX1, m_nY0, m_nY1, m_nTabTall;
 	double m_flRefreshAt;
 };
 
@@ -1589,6 +1570,7 @@ static void GMP_SpawnMenuDown( const CCommand &args )
 	g_hGMPSpawnMenu->Toggle();
 }
 static void GMP_SpawnMenuUp( const CCommand &args ) {}
+static void GMP_QMenuShutdown(){if(g_hGMPSpawnMenu.Get())g_hGMPSpawnMenu->Close();s_GMPQSkin.Shutdown();}
 static ConCommand gmp_menu_down( "+menu", GMP_SpawnMenuDown, "GModPort: toggle the spawn menu" );
 static ConCommand gmp_menu_up( "-menu", GMP_SpawnMenuUp );
 #endif // CLIENT_DLL

@@ -24,7 +24,12 @@ jobs:
           xcrun --sdk iphoneos clang++ -std=c++17 -fobjc-arc -fsyntax-only \
             -target arm64-apple-ios15.0 -isysroot "$(xcrun --sdk iphoneos --show-sdk-path)" \
             platform/html/html_panel.mm
-      - name: Check patched GameUI against actual Source headers
+      - name: Test Apple RGBA decoder orientation and alpha
+        run: |
+          clang++ -std=c++17 -fobjc-arc tests/image_codec_test.mm platform/image/image_codec.mm \
+            -framework Foundation -framework CoreGraphics -framework ImageIO -o image-codec-test
+          ./image-codec-test
+      - name: Check patched GameUI and Q-menu against actual Source headers
         run: |
           python3 tools/bootstrap.py --only engine --only sdl
           python3 tools/patch_engine.py deps/engine
