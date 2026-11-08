@@ -251,6 +251,13 @@ change('togles/linuxwin/glmgr_flush.inl', '\tm_pBoundPair->UpdateScreenUniform( 
        '\t\t}\n'
        '\t}\n#endif\n'
        '\tm_pBoundPair->UpdateScreenUniform( m_ViewportBox.GetData().widthheight );')
+# Depth-only shaders have no color output. Never generate a zero-length output
+# array or an sRGB operation referencing a nonexistent gl_FragData[0].
+change('togles/linuxwin/dx9asmtogl2.cpp', '\t// Control bit for sRGB Write suffix\n',
+       '#if defined(SOURCE_IOS)\n'
+       '\tif ( m_iFragDataCount == 0 ) m_bGenerateSRGBWriteSuffix = false;\n'
+       '#endif\n\t// Control bit for sRGB Write suffix\n')
+
 # The fallback encodes only draws that request sRGB. No log(negative), no
 # conversion on linear HDR intermediates, and no change to alpha.
 change('togles/linuxwin/dx9asmtogl2.cpp',

@@ -15,6 +15,11 @@ struct Context {
  @DRAW_STATE@
  }
 };
+bool NeedsSuffix(int outputs){
+ int m_iFragDataCount=outputs;bool m_bGenerateSRGBWriteSuffix=true;
+ @DEPTH_GUARD@
+ return m_bGenerateSRGBWriteSuffix;
+}
 GLuint Compile(GLenum type,const char* code){GLuint s=glCreateShader(type);glShaderSource(s,1,&code,nullptr);glCompileShader(s);GLint okay;glGetShaderiv(s,GL_COMPILE_STATUS,&okay);if(!okay){char b[4096];glGetShaderInfoLog(s,sizeof(b),nullptr,b);std::fprintf(stderr,"%s\n",b);}assert(okay);return s;}
 GLuint Program(){
  const char* vs="#version 300 es\nvoid main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));gl_Position=vec4(p*2.-1.,0,1);}";
@@ -45,6 +50,8 @@ int main(){
  EGLConfig cfg;EGLint n;assert(eglChooseConfig(d,attrs,&cfg,1,&n)&&n==1);EGLint size[]={EGL_WIDTH,1,EGL_HEIGHT,1,EGL_NONE},ca[]={EGL_CONTEXT_CLIENT_VERSION,3,EGL_NONE};
  EGLSurface surface=eglCreatePbufferSurface(d,cfg,size);EGLContext context=eglCreateContext(d,cfg,EGL_NO_CONTEXT,ca);assert(eglMakeCurrent(d,surface,surface,context));
  GLuint vao;glGenVertexArrays(1,&vao);glBindVertexArray(vao);glViewport(0,0,1,1);glDisable(GL_DITHER);
+ assert(!NeedsSuffix(0)&&NeedsSuffix(1));
+ GLuint depthShader=Compile(GL_FRAGMENT_SHADER,"#version 300 es\nprecision highp float;void main(){gl_FragDepth=0.5;}");glDeleteShader(depthShader);
  GLuint first=Program(),second=Program();Pair a,b;a.m_locFragmentFakeSRGBEnable=glGetUniformLocation(first,"flSRGBWrite");b.m_locFragmentFakeSRGBEnable=glGetUniformLocation(second,"flSRGBWrite");
  assert(a.m_locFragmentFakeSRGBEnable==0); // Exercise the valid zero-location case on Mesa.
  Context ctx;ctx.m_pBoundPair=&a;
