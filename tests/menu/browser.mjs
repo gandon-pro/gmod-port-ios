@@ -82,6 +82,7 @@ try{
   assert(commands.includes('gameui_hide'),JSON.stringify(commands));
   await page.evaluate(()=>{location.hash='#/dupes/'});
   await page.locator('workshopicon').filter({hasText:'new build'}).waitFor();
+  assert.equal(await page.locator('.page[ng-controller="ControllerDupes"] workshopicon').first().evaluate(card=>angular.element(card).scope()),undefined);
   await page.getByText('Load into Duplicator',{exact:true}).first().click();
   await page.waitForTimeout(100);await chain;
   assert(commands.includes('DupeArm dupes/new build.dupe'),JSON.stringify(commands));
@@ -92,7 +93,9 @@ try{
   await page.waitForTimeout(400);await chain;
   assert(commands.some(s=>s.startsWith('DemoRecord recording_')),JSON.stringify(commands));
   assert(commands.includes('DemoStop '),JSON.stringify(commands));
-  await page.locator('control[ng-click="PlayDemo( file )"]').first().click();
+  const demoCard=page.locator('workshopicon').filter({hasText:'recording_1'}).first();
+  await demoCard.hover();
+  await demoCard.locator('control[ng-click="PlayDemo( file )"]').click();
   await page.waitForTimeout(100);await chain;
   assert(commands.includes('DemoPlay demos/recording_1.dem'),JSON.stringify(commands));
   await page.screenshot({path:path.join(artifact,'local-demos.png')});

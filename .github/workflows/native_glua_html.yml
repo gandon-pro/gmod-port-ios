@@ -61,6 +61,7 @@ jobs:
           else
             tests/menu/node_modules/.bin/playwright install chromium
           fi
+          node tests/menu/local_controls.mjs
           node tests/menu/browser.mjs deps/garrysmod/garrysmod build-native-host/glua_menu_test
       - name: Record original Lua bootstrap readiness
         run: |

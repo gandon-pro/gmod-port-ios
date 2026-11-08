@@ -36,3 +36,9 @@ node tests/menu/browser.mjs deps/garrysmod/garrysmod build-native-host/glua_menu
 ```
 
 The local action fixture compiles the production dispatch branches with the actual pinned demo-header declaration against a deterministic file/engine host. It verifies dupe/save command paths with spaces, record/stop/play, invalid/partial demo rejection, protocol mismatch, overwrite prevention and bounded deletion/cleanup. Lua tests exercise the unchanged local controllers, pagination, callbacks and commands. Caption/path tests cover long names and prohibited paths. Browser checks cover the original Angular pages and added controls; they require an installed Chromium and are wired into CI. Native iPhone compilation and on-device behaviour are separate gates, not implied by these host tests.
+
+## Angular production-mode regression
+
+Build106's IPA compilation succeeded, but the original-HTML browser test timed out waiting for `Load into Duplicator`. The unchanged `html/js/menu/common.js` disables `$compileProvider.debugInfoEnabled`, so `angular.element(card).scope()` cannot expose the row data. The extension now uses `dupe.Scope.Files`, which is the original WorkshopFiles controller's public model, and adds a visible button directly to each local card rather than the hover-only action tray.
+
+`node tests/menu/local_controls.mjs` executes the production extension with Angular DOM scope access deliberately forbidden. It covers local/online cards, refreshed rows, repeated mutation callbacks and recording controls. The original browser test retains disabled debug metadata and now checks that condition explicitly. For the existing original demo Play control, the browser test hovers the card to expose Source's hover-only action tray before clicking it.

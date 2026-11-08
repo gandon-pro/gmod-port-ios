@@ -31,13 +31,15 @@ local tools = [=[
  function button(text,code,refresh){var b=document.createElement('button');b.textContent=text;b.style.cssText='display:block;margin:8px 0;padding:8px;cursor:pointer';b.onclick=function(){lua.Run(code);if(refresh)setTimeout(function(){if(window.demo&&demo.Scope)demo.Scope.RefreshCurrentView()},300)};return b}
  function update(){
   var route=location.hash.toLowerCase();
-  if(route.indexOf('dupes')!==-1)document.querySelectorAll('workshopicon').forEach(function(card){
+  var dupesPage=document.querySelector('.page[ng-controller="ControllerDupes"]');
+  if(route.indexOf('dupes')!==-1&&dupesPage)dupesPage.querySelectorAll('workshopicon').forEach(function(card,index){
    if(card.querySelector('[data-gmp-arm]'))return;
-   var scope=window.angular&&angular.element(card).scope(),file=scope&&scope.file;
+   // Original common.js disables Angular DOM scope metadata. Use its public controller model.
+   var files=window.dupe&&dupe.Scope&&dupe.Scope.Files,file=files&&files[index];
    if(!file||!file.local)return;
-   var actions=card.querySelector('controls');if(!actions)return;
-   var arm=document.createElement('control');arm.textContent='Load into Duplicator';arm.setAttribute('data-gmp-arm','1');
-   arm.onclick=function(){gmod.ArmDupe(file.info.file)};actions.appendChild(arm);
+   var arm=document.createElement('button');arm.textContent='Load into Duplicator';arm.setAttribute('data-gmp-arm','1');
+   arm.style.cssText='position:absolute;left:6px;right:6px;bottom:36px;z-index:11;padding:6px;font-size:12px;cursor:pointer';
+   arm.onclick=function(){gmod.ArmDupe(file.info.file)};card.appendChild(arm);
   });
   var page=document.querySelector('.page .options ul');if(!page||page.querySelector('[data-gmp-local]'))return;
   var li=document.createElement('li');li.setAttribute('data-gmp-local','1');
