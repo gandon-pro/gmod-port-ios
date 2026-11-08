@@ -144,3 +144,30 @@ staging; uploaded bytes at a nonzero offset are verified on the GPU. Bounds,
 already-mapped buffers, a simulated OOM status, disabled staging and incorrect
 bindings are rejected. This verifies the fallback, not the cause of the iPhone
 crash. A new device run is required to determine whether it resolves that case.
+
+## Scene output encoding after build 98
+
+The next device capture identifies build 98, a loaded `gm_construct`, integer
+HDR, HDR map lighting, monitor gamma 2.2 and fullbright off. The screenshot has
+bright UI over a dark scene. This does not establish an exposure value or PC
+pixel match, but it rules out assuming HDR was disabled.
+
+The pinned renderer hard-coded `m_hasGammaWrites=true` and created sRGB render
+targets while presenting to a linear surface. It also left the software
+`flSRGBWrite` state disconnected from draws. The iOS path now uses coherent
+software sRGB output: linear RT storage, no forced sRGB reads from RTs, an
+initialized requested-write state, and an uploaded per-program write uniform.
+The shader suffix uses the piecewise sRGB transfer function and only runs for
+requested encoded writes. It leaves alpha and linear intermediates unchanged.
+The desktop `GL_FRAMEBUFFER_SRGB` switch is not issued on iOS. Non-renderable
+sRGB textures retain normal decoding; gamma-ramp handling is separate.
+
+`tests/test_srgb_output.py` extracts the exact shader suffix and draw-state
+patch. On Mesa GLES3 it reproduces an RT-to-linear-presentation blit yielding
+46/255 for linear input 0.18 on the old route and 118/255 on the corrected
+route. It checks the transfer-function threshold, zero/negative inputs, alpha,
+state changes, program switches, uniform location zero and raw/UI passthrough.
+This validates that color path; the final device image and original SkyPaint
+are still unverified/unimplemented respectively. The supplied PC reference
+uses a different position and a video frame, so exact pixel equality cannot
+be measured from the two images.

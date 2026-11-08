@@ -210,6 +210,70 @@ change('togles/linuxwin/cglmbuffer.cpp',
        '\t\tWarning("GMP buffer: lock rejected: range outside storage handle=%u offset=%u requested=%u capacity=%u\\n", m_nHandle, pParams->m_nOffset, pParams->m_nSize, m_nSize);\n'
        '\t\tDXABSTRACT_BREAK_ON_ERROR();\n\t\treturn;\n\t}')
 
+# iOS/ANGLE uses linear presentation and render targets. GLES3 does not expose
+# desktop GL_FRAMEBUFFER_SRGB switching, so use Source's shader-write fallback.
+change('appframework/glmdisplaydb_linuxwin.inl',
+       '        m_info.m_hasGammaWrites = true;\n\tm_info.m_cantAttachSRGB = false;',
+       '#if defined(SOURCE_IOS)\n'
+       '        m_info.m_hasGammaWrites = false;\n        m_info.m_cantAttachSRGB = true;\n'
+       '#else\n        m_info.m_hasGammaWrites = true;\n\tm_info.m_cantAttachSRGB = false;\n#endif')
+change('togles/linuxwin/dxabstract.cpp',
+       '\tpCaps->CanDoSRGBReadFromRTs\t\t=\ttrue;//!glmRendererInfo.m_cantAttachSRGB;',
+       '#if defined(SOURCE_IOS)\n'
+       '\tpCaps->CanDoSRGBReadFromRTs = !glmRendererInfo.m_cantAttachSRGB;\n'
+       '#else\n\tpCaps->CanDoSRGBReadFromRTs\t\t=\ttrue;//!glmRendererInfo.m_cantAttachSRGB;\n#endif')
+change('togles/linuxwin/glmgr.cpp', '\tm_nNumDirtySamplers = 0;\n',
+       '\tm_nNumDirtySamplers = 0;\n\tm_FakeBlendEnableSRGB = false;\n')
+# Initialization/clear-state flushes must not issue the unsupported desktop enum.
+change('public/togles/linuxwin/glmgr.h',
+       'FORCEINLINE void GLContextSet( GLBlendEnableSRGB_t *src )\n{',
+       'FORCEINLINE void GLContextSet( GLBlendEnableSRGB_t *src )\n{\n'
+       '#if defined(SOURCE_IOS)\n\t(void)src; return; // shader-managed sRGB output\n#endif\n')
+# Software-encoded render targets must keep linear storage even when decode
+# switching becomes available; otherwise automatic sRGB writes encode twice.
+change('togles/linuxwin/cglmtex.cpp',
+       '\tif ( gGL->m_bHave_GL_EXT_texture_sRGB_decode )\n\t{',
+       '\tif ( gGL->m_bHave_GL_EXT_texture_sRGB_decode\n'
+       '#if defined(SOURCE_IOS)\n\t\t&& !(key->m_texFlags & kGLMTexRenderable)\n#endif\n\t)\n\t{')
+
+# Updating the requested state alone is insufficient: GLSL uniforms start at 0.
+change('togles/linuxwin/glmgr_flush.inl', '\tm_pBoundPair->UpdateScreenUniform( m_ViewportBox.GetData().widthheight );',
+       '#if defined(SOURCE_IOS)\n'
+       '\tif ( !m_caps.m_hasGammaWrites && m_pBoundPair->m_locFragmentFakeSRGBEnable >= 0 )\n'
+       '\t{\n'
+       '\t\tconst float enabled = m_FakeBlendEnableSRGB ? 1.0f : 0.0f;\n'
+       '\t\tif ( m_pBoundPair->m_fakeSRGBEnableValue != enabled )\n'
+       '\t\t{\n'
+       '\t\t\tgGL->glUniform1f(m_pBoundPair->m_locFragmentFakeSRGBEnable, enabled);\n'
+       '\t\t\tm_pBoundPair->m_fakeSRGBEnableValue = enabled;\n'
+       '\t\t\tstatic bool reported = false;\n'
+       '\t\t\tif ( enabled > 0.5f && !reported ) { Msg("GMP sRGB output: software write uniform active, linear RT policy\\n"); reported = true; }\n'
+       '\t\t}\n'
+       '\t}\n#endif\n'
+       '\tm_pBoundPair->UpdateScreenUniform( m_ViewportBox.GetData().widthheight );')
+# The fallback encodes only draws that request sRGB. No log(negative), no
+# conversion on linear HDR intermediates, and no change to alpha.
+change('togles/linuxwin/dx9asmtogl2.cpp',
+       '\t\tStrcatToALUCode( "vec3 sRGBFragData;\\n" );\n'
+       '\t\tStrcatToALUCode( "sRGBFragData.xyz = log( gl_FragData[0].xyz );\\n" );\n'
+       '\t\tStrcatToALUCode( "sRGBFragData.xyz = sRGBFragData.xyz * vec3( 0.454545f, 0.454545f, 0.454545f );\\n" );\n'
+       '\t\tStrcatToALUCode( "sRGBFragData.xyz = exp( sRGBFragData.xyz );\\n" );\n'
+       '\t\tStrcatToALUCode( "gl_FragData[0].xyz = mix( gl_FragData[0].xyz, sRGBFragData, flSRGBWrite );\\n" );',
+       '#if defined(SOURCE_IOS)\n'
+       '\t\tStrcatToALUCode("if (flSRGBWrite > 0.5) {\\n");\n'
+       '\t\tStrcatToALUCode("vec3 linearRGB = max(gl_FragData[0].rgb, vec3(0.0));\\n");\n'
+       '\t\tStrcatToALUCode("vec3 lowRGB = linearRGB * 12.92;\\n");\n'
+       '\t\tStrcatToALUCode("vec3 highRGB = 1.055 * pow(linearRGB, vec3(1.0 / 2.4)) - 0.055;\\n");\n'
+       '\t\tStrcatToALUCode("gl_FragData[0].rgb = mix(highRGB, lowRGB, lessThanEqual(linearRGB, vec3(0.0031308)));\\n");\n'
+       '\t\tStrcatToALUCode("}\\n");\n'
+       '#else\n'
+       '\t\tStrcatToALUCode( "vec3 sRGBFragData;\\n" );\n'
+       '\t\tStrcatToALUCode( "sRGBFragData.xyz = log( gl_FragData[0].xyz );\\n" );\n'
+       '\t\tStrcatToALUCode( "sRGBFragData.xyz = sRGBFragData.xyz * vec3( 0.454545f, 0.454545f, 0.454545f );\\n" );\n'
+       '\t\tStrcatToALUCode( "sRGBFragData.xyz = exp( sRGBFragData.xyz );\\n" );\n'
+       '\t\tStrcatToALUCode( "gl_FragData[0].xyz = mix( gl_FragData[0].xyz, sRGBFragData, flSRGBWrite );\\n" );\n'
+       '#endif')
+
 # Observe the real sampler path; do not infer sRGB support from an extension warning.
 change('togles/linuxwin/glmgr.cpp',
        '\tGLMDebugPrintf( "GL sampler object usage: %s\\n", m_bUseSamplerObjects ? "ENABLED" : "DISABLED" );',
