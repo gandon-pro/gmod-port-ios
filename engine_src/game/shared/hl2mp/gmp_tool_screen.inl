@@ -28,10 +28,18 @@ static const char *GMP_ToolPhrase(const char *key)
     auto found=s_GMPToolLanguage.find(key[0]=='#'?key+1:key);
     return found==s_GMPToolLanguage.end()?key:found->second.c_str();
 }
+// Match CMatSystemSurface::StartDrawing. Source's MatrixBuildOrtho uses +Y down
+// before the projection flip; omitting this reverses both image orientation and winding.
+static void GMP_ToolScreenBegin2D(IMatRenderContext *ctx)
+{
+    ctx->MatrixMode(MATERIAL_PROJECTION);ctx->PushMatrix();ctx->LoadIdentity();
+    ctx->Scale(1,-1,1);ctx->Ortho(0,0,256,256,-1,1);
+    ctx->MatrixMode(MATERIAL_VIEW);ctx->PushMatrix();ctx->LoadIdentity();
+}
 class CGMPToolScreenPanel : public vgui::Panel
 {
 public:
-    CGMPToolScreenPanel():vgui::Panel(NULL,"GModToolgunScreen"),m_Font(0),m_Background(0),m_Ready(false){
+    CGMPToolScreenPanel():vgui::Panel(NULL,"GModToolgunScreen"),m_Font(0),m_Background(0),m_Ready(false),m_Paints(0){
         SetBounds(0,0,256,256);SetMouseInputEnabled(false);SetKeyBoardInputEnabled(false);
         SetPaintBackgroundEnabled(false);SetPaintBorderEnabled(false);
     }
@@ -46,12 +54,14 @@ public:
         m_VM.reset(new glua::Runtime(config));m_Ready=m_VM->File("port/tool_screen.lua");return m_Ready;
     }
     ~CGMPToolScreenPanel(){if(m_Background)vgui::surface()->DestroyTextureID(m_Background);}
+    unsigned int Paints()const{return m_Paints;}
     void Paint() override {
         if(!m_Ready)return;
         lua_State *L=m_VM->State();int top=lua_gettop(L);
         lua_getglobal(L,"toolscreen");lua_getfield(L,-1,"Paint");
         if(lua_pcall(L,0,0,0)){Warning("Tool screen paint failed: %s\n",lua_tostring(L,-1));m_Ready=false;}
         lua_settop(L,top);
+        if(m_Ready&&++m_Paints==1)Msg("Tool screen: first original Lua paint submitted (256x256)\n");
     }
 private:
     static int Invoke(lua_State *L){
@@ -70,7 +80,8 @@ private:
             lua_getfield(L,3,"font");std::string family=luaL_checkstring(L,-1);lua_pop(L,1);
             lua_getfield(L,3,"size");int size=luaL_checkinteger(L,-1);lua_pop(L,1);
             lua_getfield(L,3,"weight");int weight=luaL_checkinteger(L,-1);lua_pop(L,1);
-            self->m_Font=s->CreateFont();
+            // VGUI font handles live until surface shutdown; reuse across map changes.
+            static vgui::HFont font=0;if(!font)font=s->CreateFont();self->m_Font=font;
             if(!s->SetFontGlyphSet(self->m_Font,family.c_str(),size,weight,0,0,vgui::ISurface::FONTFLAG_ANTIALIAS))return luaL_error(L,"Tool screen font unavailable: %s",family.c_str());
             return 0;
         }
@@ -89,7 +100,7 @@ private:
         if(!strcmp(op,"DrawTexturedRect")){int x=luaL_checknumber(L,2),y=luaL_checknumber(L,3);s->DrawTexturedRect(x,y,x+luaL_checknumber(L,4),y+luaL_checknumber(L,5));return 0;}
         return luaL_error(L,"Unknown tool screen operation: %s",op);
     }
-    vgui::HFont m_Font;int m_Background;bool m_Ready;std::unique_ptr<glua::Runtime> m_VM;
+    vgui::HFont m_Font;int m_Background;bool m_Ready;unsigned int m_Paints;std::unique_ptr<glua::Runtime> m_VM;
 };
 class CGMPToolScreenSystem : public CAutoGameSystemPerFrame
 {
@@ -111,6 +122,9 @@ public:
         }
         return index>=0&&index<3?m_Icons[index]:0;
     }
+    void PrintStatus()const{
+        Msg("Tool screen status: attempted=%d target=%d paints=%u\n",m_Attempted,m_Panel!=NULL,m_Panel?m_Panel->Paints():0);
+    }
     void Shutdown() override {Release();}
     void LevelShutdownPostEntity() override {Release();}
     void PreRender() override {
@@ -120,8 +134,7 @@ public:
         if(!m_Panel||!m_Target.IsValid())return;
         CMatRenderContextPtr ctx(materials);
         ctx->PushRenderTargetAndViewport(m_Target,0,0,256,256);
-        ctx->MatrixMode(MATERIAL_PROJECTION);ctx->PushMatrix();ctx->LoadIdentity();ctx->Ortho(0,0,256,256,-1,1);
-        ctx->MatrixMode(MATERIAL_VIEW);ctx->PushMatrix();ctx->LoadIdentity();
+        GMP_ToolScreenBegin2D(ctx);
         VMatrix panelToWorld;panelToWorld.Identity();panelToWorld[1][1]=-1;
         static_cast<IMatSystemSurface *>(vgui::surface())->DrawPanelIn3DSpace(m_Panel->GetVPanel(),panelToWorld,256,256,256,256);
         ctx->MatrixMode(MATERIAL_VIEW);ctx->PopMatrix();ctx->MatrixMode(MATERIAL_PROJECTION);ctx->PopMatrix();ctx->MatrixMode(MATERIAL_MODEL);
@@ -140,7 +153,7 @@ private:
         m_Panel=new CGMPToolScreenPanel;
         if(!m_Panel->Start()){ReleaseResources();return;}
         base->SetTextureValue(m_Target);
-        Msg("Tool screen: original cl_viewscreen.lua, GModToolgunScreen 256x256 active\n");
+        Msg("Tool screen: original cl_viewscreen.lua initialized; awaiting first 256x256 paint\n");
     }
     void ReleaseResources(){
         if(m_Material.IsValid()&&m_Original.IsValid()){bool found=false;IMaterialVar *base=m_Material->FindVar("$basetexture",&found,false);if(found)base->SetTextureValue(m_Original);}
@@ -154,3 +167,5 @@ private:
     CGMPToolScreenPanel *m_Panel;bool m_Attempted,m_IconsAttempted;int m_Icons[3],m_Gradient;CMaterialReference m_Material;CTextureReference m_Target,m_Original;
 };
 static CGMPToolScreenSystem s_GMPToolScreenSystem;
+
+CON_COMMAND(gmp_tool_screen_status,"Print Tool Gun RT initialization and submitted paint count"){s_GMPToolScreenSystem.PrintStatus();}

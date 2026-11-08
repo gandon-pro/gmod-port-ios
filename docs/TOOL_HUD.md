@@ -20,3 +20,19 @@ ctest --test-dir build-native-host --output-on-failure
 macOS CI type-checks the actual client/server weapon translation units plus native HUD units against the pinned Source headers and iPhone SDK, then builds the IPA.
 
 Device acceptance: enter gm_construct, equip Tool Gun, select weld then rope (screen name scrolls/changes), toggle gmod_drawhelp, cycle with both touch arrow buttons and confirm using FIRE, spawn prop/weapon/NPC from their icons, scroll long lists, rotate/resize, change map and reconnect. Verify health/armour/ammo reflect damage, suit battery, reload and weapon changes. Original PNG/materials, model textures and fonts must be installed in GAME. No device runtime result is inferred from host checks or the compiler.
+
+## Build 104 device regressions
+
+`engine(4).log` records successful Tool Gun Lua initialization at 37.8354s with no Lua paint error, while the device screenshot shows a black screen. Initialization alone was not proof of submitted pixels.
+
+The RT projection omitted the `Scale(1,-1,1)` used by the pinned `CMatSystemSurface::StartDrawing`. Source's inline `MatrixBuildOrtho` explicitly requires that compensation. The helper now uses the same projection orientation, while retaining the model flip that cancels DrawPanelIn3DSpace's pixel-to-world Y scale. A GLES3 regression executes the production helper with Source's actual inline ortho math: the old path is culled to black with clockwise fronts, and vertically inverted without culling; the fixed path draws the expected top and bottom colours.
+
+The native bucket selector defaults `hud_showemptyweaponslots` to 1. Tool Gun's original position 6 and sparse crowbar positions therefore generated tall empty boxes. The installed `gmp_bindings.cfg`, executed on each launch, sets it to 0, keeping original weapon positions and all real entries. Users can explicitly re-enable the native setting from the console.
+
+```
+LIBGL_ALWAYS_SOFTWARE=1 python3 tests/test_tool_ui.py --engine deps/engine
+```
+
+This test also compiles and runs the actual pinned Source bucket loop with sparse positions, reproducing the old empty cells and verifying they disappear when the setting is 0. The production helper and engine loop are extracted for the test rather than reimplemented. It is wired into the GLES3 CI job.
+
+The first successfully submitted original Lua paint now has a separate log marker. `gmp_tool_screen_status` prints initialization/target state and submitted paint count. These counters are diagnostics, not a readback proof of the on-device image. Device validation of this fix remains required.
