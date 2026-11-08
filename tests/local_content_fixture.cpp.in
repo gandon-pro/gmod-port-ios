@@ -1,0 +1,69 @@
+#include "glua_runtime.h"
+#include "gmp_local_files.h"
+#include <cassert>
+#include <cstring>
+#include <map>
+#include <string>
+#include <vector>
+#include <algorithm>
+#define MAX_OSPATH 260
+#define DEMO_HEADER_ID "HL2DEMO"
+#define DEMO_PROTOCOL 3
+@DEMO_HEADER@
+int LittleDWord(int x){return x;}
+void LittleFloat(float *out,const float *in){*out=*in;}
+@DEMO_BYTESWAP@
+@MENU_NAME@
+using FileHandle_t=std::string*;
+#define FILESYSTEM_INVALID_HANDLE nullptr
+struct Files {
+ std::map<std::string,std::string> data;
+ bool FileExists(const char *name,const char *realm){assert(std::string(realm)=="MOD");return data.count(name);}
+ void RemoveFile(const char *name,const char *realm){assert(std::string(realm)=="MOD");data.erase(name);}
+ FileHandle_t Open(const char *name,const char *mode,const char *realm){assert(std::string(mode)=="rb"&&std::string(realm)=="MOD");auto it=data.find(name);return it==data.end()?nullptr:&it->second;}
+ int Read(void *out,int n,FileHandle_t handle){int got=std::min(n,int(handle->size()));memcpy(out,handle->data(),got);return got;}
+ void Close(FileHandle_t){}
+ void CreateDirHierarchy(const char *name,const char *realm){assert(std::string(name)=="demos"&&std::string(realm)=="MOD");}
+} files,*g_pFullFileSystem=&files;
+struct Engine {
+ bool recording=false,playing=false;std::vector<std::string> commands;
+ bool IsRecordingDemo(){return recording;}bool IsPlayingDemo(){return playing;}int GetProtocolVersion(){return 24;}
+ void ClientCmd_Unrestricted(const char *cmd){commands.push_back(cmd);}
+} engineFixture,*engine=&engineFixture;
+struct UI {bool game=true;bool hidden=false;bool IsInLevel(){return game;}bool IsInBackgroundLevel(){return false;}void HideGameUI(){hidden=true;}} ui;
+UI &GameUI(){return ui;}
+struct Menu {
+ bool active=true;std::vector<std::string> notifications;
+ void SetActive(bool a){active=a;}
+ void Notify(const char *s){notifications.push_back(s);}
+ int Dispatch(lua_State *L){const char *op=luaL_checkstring(L,1);
+ @LOCAL_DELETE@
+ @LOCAL_ACTION@
+ return luaL_error(L,"Unknown test action");
+ }
+ static int Call(lua_State *L){return static_cast<Menu *>(lua_touserdata(L,lua_upvalueindex(1)))->Dispatch(L);}
+};
+int main(){
+ lua_State *L=luaL_newstate();Menu menu;
+ auto run=[&](const char *action,const char *file,bool success=true){
+  lua_pushlightuserdata(L,&menu);lua_pushcclosure(L,Menu::Call,1);lua_pushliteral(L,"LocalAction");lua_pushstring(L,action);lua_pushstring(L,file);
+  int status=lua_pcall(L,3,0,0);assert((status==0)==success);lua_settop(L,0);
+ };
+ files.data["dupes/my build.dupe"]="DUP3";files.data["dupes/my build.txt"]="metadata";files.data["dupes/my build.jpg"]="preview";files.data["saves/my save.gms"]="GMP";
+ run("DupeArm","dupes/my build.dupe");assert(engine->commands.back()=="gm_dupe_open dupes/my build.dupe\n"&&!menu.active&&ui.hidden);
+ run("SaveLoad","saves/my save.gms");assert(engine->commands.back()=="gm_load my save\n");
+ run("DupeArm","dupes/../cfg/config.cfg",false);run("DupeArm","dupes/missing.dupe",false);
+ ui.game=false;run("DupeSave","",false);run("DemoRecord","recording_1",false);ui.game=true;
+ run("DemoRecord","recording_1");assert(engine->commands.back()=="record \"demos/recording_1\"\n");
+ files.data["demos/recording_1.dem"]="partial";run("DemoRecord","recording_1",false);
+ run("DemoPlay","demos/recording_1.dem",false);
+ demoheader_t header{};memcpy(header.demofilestamp,DEMO_HEADER_ID,8);header.demoprotocol=DEMO_PROTOCOL;header.networkprotocol=24;
+ files.data["demos/recording_1.dem"]=std::string(reinterpret_cast<const char *>(&header),sizeof(header));
+ run("DemoPlay","demos/recording_1.dem");assert(engine->commands.back()=="playdemo \"demos/recording_1.dem\"\n");
+ header.networkprotocol=999;files.data["demos/recording_1.dem"]=std::string(reinterpret_cast<const char *>(&header),sizeof(header));run("DemoPlay","demos/recording_1.dem",false);
+ engine->recording=true;run("DemoPlay","demos/recording_1.dem",false);run("DemoRecord","recording_2",false);run("DemoStop","");assert(engine->commands.back()=="stop\n");
+ auto del=[&](const char *path,bool okay){lua_pushlightuserdata(L,&menu);lua_pushcclosure(L,Menu::Call,1);lua_pushliteral(L,"LocalDelete");lua_pushstring(L,path);int status=lua_pcall(L,2,1,0);assert((status==0)==okay);lua_settop(L,0);};
+ del("demos/recording_1.dem",false);engine->recording=false;del("dupes/my build.dupe",true);assert(!files.data.count("dupes/my build.dupe")&&!files.data.count("dupes/my build.txt")&&!files.data.count("dupes/my build.jpg"));
+ files.data["cfg/config.cfg"]="keep";del("cfg/config.cfg",false);assert(files.data.count("cfg/config.cfg"));
+ lua_close(L);puts("PASS: production local menu actions; dupe/save commands, recording/stop/play, truncated and incompatible demos, overwrite and path validation, deletion");
+}

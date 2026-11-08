@@ -322,6 +322,9 @@ int main(int, char**) {
             @[resource(@"GameLogo.res"), [ui stringByAppendingPathComponent:@"GameLogo.res"]]]];
         [copies addObject:@[resource(@"original_tool/cl_viewscreen.lua"), [game stringByAppendingPathComponent:@"gamemodes/sandbox/entities/weapons/gmod_tool/cl_viewscreen.lua"]]];
         [copies addObject:@[resource(@"original_tool/tool.properties"), [game stringByAppendingPathComponent:@"resource/localization/en/tool.properties"]]];
+        [copies addObject:@[resource(@"original_local/workshop_files.lua"), [game stringByAppendingPathComponent:@"lua/includes/util/workshop_files.lua"]]];
+        for (NSString* name in @[@"menu_dupe.lua", @"menu_demo.lua", @"menu_save.lua"])
+            [copies addObject:@[resource([@"original_local/" stringByAppendingString:name]), [[game stringByAppendingPathComponent:@"lua/menu"] stringByAppendingPathComponent:name]]];
         NSString* portLua = [game stringByAppendingPathComponent:@"lua/port"];
         [fm createDirectoryAtPath:portLua withIntermediateDirectories:YES attributes:nil error:nil];
         NSString* portLuaSource = resource(@"portlua");

@@ -44,7 +44,10 @@ static void GMP_PrintRenderStatus( const char *reason )
     // Missing variables stay explicit. Never substitute defaults for runtime data.
     const char *names[] = { "mat_hdr_level", "mat_monitorgamma", "mat_monitorgamma_tv_enabled",
         "mat_fullbright", "mat_postprocess_enable", "mat_colorcorrection", "mat_disable_bloom",
-        "mat_force_tonemap_scale", "mat_dynamic_tonemapping", "mat_specular", "mat_bumpmap" };
+        "mat_force_tonemap_scale", "mat_dynamic_tonemapping", "mat_specular", "mat_bumpmap",
+        "mat_picmip", "mat_forceaniso", "mat_filtertextures", "mat_filterlightmaps", "mat_trilinear",
+        "r_waterforceexpensive", "r_waterforcereflectentities", "r_WaterDrawReflection", "r_WaterDrawRefraction",
+        "r_shadows", "r_shadowrendertotexture", "r_shadowmaxrendered", "r_flashlightdepthtexture", "r_flashlightdepthres" };
     for ( const char *name : names )
     {
         ConVarRef value( name, true );

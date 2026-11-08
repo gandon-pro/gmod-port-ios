@@ -39,8 +39,12 @@ struct Host {
    lua_newtable(L);int n=0;auto add=[&](const std::string &s){lua_pushstring(L,s.c_str());lua_rawseti(L,-2,++n);};
    if(str(2)=="maps/*.bsp"){add("gm_construct.bsp");add("gm_flatgrass.bsp");}
    if(str(2)=="resource/localization/*.png")add("en.png");
+   if(str(2)=="dupes/*.dupe"){add("new build.dupe");add("old.dupe");}
+   if(str(2)=="demos/*.dem")add("recording_1.dem");
    lua_newtable(L);return 2;
   }
+  if(op=="LocalDelete"){commands.push_back("delete "+str(2));lua_pushboolean(L,true);return 1;}
+  if(op=="LocalAction"){commands.push_back(str(2)+" "+str(3));return 0;}
   if(op=="KeyValues"){lua_newtable(L);return 1;}
   if(op=="Gamemodes"){
    lua_newtable(L);lua_newtable(L);for(const auto &p:std::map<std::string,std::string>{{"name","sandbox"},{"title","Sandbox"},{"maps","^gm_|^gmod_"}}){lua_pushstring(L,p.second.c_str());lua_setfield(L,-2,p.first.c_str());}lua_pushboolean(L,true);lua_setfield(L,-2,"menusystem");lua_rawseti(L,-2,1);return 1;
@@ -91,6 +95,10 @@ int main(int argc,char **argv){
  assert(vm.String("ToggleFavourite('gm_construct'); assert(GetMapList().Favourites[1]=='gm_construct'); SaveLastMap('gm_construct','Sandbox')","original persistence"));
  assert(!host.data["menu_cookies.json"].empty());
  assert(vm.String(R"lua(local j=include('port/json.lua'); assert(j.decode('[false,null,"\\ud83d\\ude00"]')[1]==false); assert(j.decode(j.encode({x='a\n"b',n=-12.5})).x=='a\n"b'); for _,bad in ipairs({'01','1.','1e','[1,]','{"a":1,}','"\\ud800"','NaN','true false'}) do assert(not pcall(j.decode,bad),bad) end)lua","JSON strictness"));
+ assert(vm.String("ws_dupe:Fetch('local',0,1,{}); demo:Fetch('local',0,20,{}); ws_dupe:Arm('dupes/new build.dupe'); demo:Play('demos/recording_1.dem'); port.RecordDemo(); port.StopDemo(); file.Delete('dupes/old.dupe','MOD')","local libraries"));
+ bool dupes=false,demos=false;for(const auto &s:host.js){if(s.find("dupe.ReceiveLocal(")!=std::string::npos&&s.find("new build.dupe")!=std::string::npos&&s.find("old.dupe")==std::string::npos)dupes=true;if(s.find("demo.ReceiveLocal(")!=std::string::npos&&s.find("recording_1.dem")!=std::string::npos)demos=true;}
+ assert(dupes&&demos);assert(host.commands.back()=="delete dupes/old.dupe");
+ assert(vm.String("assert(not pcall(function() demo:Fetch('local',-1,10,{}) end)); assert(not pcall(function() demo:Fetch('local',0,10000,{}) end))","invalid library pages"));
  assert(vm.String("port.MenuShutdown(); assert(not IsValid(pnlMainMenu))","shutdown"));assert(host.destroyed);assert(host.errors.empty());assert(lua_gettop(vm.State())==0);
  std::cout<<"PASS: unchanged Facepunch mainmenu/getmaps, DHTML callbacks, JSON, map start, favourites, persistence and cleanup\n";
 }

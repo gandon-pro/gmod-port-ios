@@ -1,6 +1,8 @@
 #include "../game/shared/gmod/glua_runtime.h"
 #include "tier1/utlbuffer.h"
 #include "html_panel.h"
+#include "gmp_local_files.h"
+#include "demofile/demoformat.h"
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
@@ -99,12 +101,72 @@ private:
             lua_pushboolean(L,g_pFullFileSystem->WriteFile(path.c_str(),"MOD",buffer));return 1;
         }
         if(!strcmp(op,"Exists")){std::string path;const char *input=luaL_checkstring(L,2);lua_pushboolean(L,glua::Runtime::Normalize("",input,path)&&g_pFullFileSystem->FileExists(path.c_str(),"GAME"));return 1;}
+        if(!strcmp(op,"LocalDelete")){
+            const std::string path=luaL_checkstring(L,2);
+            if(!gmp::LocalDeletable(path))return luaL_error(L,"Invalid local file deletion");
+            if(engine->IsRecordingDemo()&&gmp::LocalFile(path,"demos",".dem"))return luaL_error(L,"Stop recording before deleting a demo");
+            g_pFullFileSystem->RemoveFile(path.c_str(),"MOD");
+            if(gmp::LocalFile(path,"dupes",".dupe")||gmp::LocalFile(path,"saves",".gms")||gmp::LocalFile(path,"demos",".dem")){
+                const std::string stem=path.substr(0,path.find_last_of('.'));
+                for(const char *extension:{".txt",".jpg",".png"})g_pFullFileSystem->RemoveFile((stem+extension).c_str(),"MOD");
+            }
+            lua_pushboolean(L,!g_pFullFileSystem->FileExists(path.c_str(),"MOD"));return 1;
+        }
+        if(!strcmp(op,"LocalAction")){
+            const std::string action=luaL_checkstring(L,2),path=luaL_checkstring(L,3);
+            std::string command;
+            if(action=="DupeArm"||action=="SaveLoad"){
+                const bool dupe=action=="DupeArm";
+                if(!gmp::LocalFile(path,dupe?"dupes":"saves",dupe?".dupe":".gms")||!g_pFullFileSystem->FileExists(path.c_str(),"MOD"))return luaL_error(L,"Local file is missing or invalid");
+                if(!GameUI().IsInLevel()||GameUI().IsInBackgroundLevel())return luaL_error(L,"Start a map before loading a dupe or save");
+                const std::string argument=dupe?path:path.substr(6,path.size()-10);
+                if(!dupe){
+                    if(argument.size()>64)return luaL_error(L,"Save name is too long for this port");
+                    for(unsigned char c:argument)if(!((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')||c=='_'||c=='-'||c==' '))return luaL_error(L,"Save name is not supported by the native loader");
+                }
+                // These existing server handlers consume ArgS, including spaces; do not add quotes to ArgS.
+                command=(dupe?"gm_dupe_open ":"gm_load ")+argument+"\n";
+            }else if(action=="DupeSave"){
+                if(!GameUI().IsInLevel()||GameUI().IsInBackgroundLevel())return luaL_error(L,"Start a map and copy a contraption with the Duplicator first");
+                command="gm_dupe_save\n";
+            }else if(action=="DemoRecord"){
+                if(!GameUI().IsInLevel()||GameUI().IsInBackgroundLevel()||engine->IsPlayingDemo())return luaL_error(L,"Start a playable map before recording");
+                if(engine->IsRecordingDemo())return luaL_error(L,"Demo recording is already active");
+                if(!GMP_MenuName(path.c_str()))return luaL_error(L,"Invalid recording name");
+                std::string demo="demos/"+path+".dem";
+                if(g_pFullFileSystem->FileExists(demo.c_str(),"MOD"))return luaL_error(L,"A demo with that name already exists");
+                g_pFullFileSystem->CreateDirHierarchy("demos","MOD");command="record \"demos/"+path+"\"\n";
+            }else if(action=="DemoStop"){
+                if(!engine->IsRecordingDemo()){Notify("No demo recording is active.");return 0;}
+                engine->ClientCmd_Unrestricted("stop\n");return 0;
+            }else if(action=="DemoPlay"){
+                if(!gmp::LocalFile(path,"demos",".dem"))return luaL_error(L,"Invalid local demo path");
+                if(engine->IsRecordingDemo())return luaL_error(L,"Stop recording before starting playback");
+                FileHandle_t file=g_pFullFileSystem->Open(path.c_str(),"rb","MOD");
+                if(file==FILESYSTEM_INVALID_HANDLE)return luaL_error(L,"Demo is missing");
+                demoheader_t header;int count=g_pFullFileSystem->Read(&header,sizeof(header),file);g_pFullFileSystem->Close(file);
+                if(count!=sizeof(header)||memcmp(header.demofilestamp,DEMO_HEADER_ID,sizeof(header.demofilestamp)))return luaL_error(L,"Invalid or incomplete demo header");
+                ByteSwap_demoheader_t(header);
+                if(header.demoprotocol!=DEMO_PROTOCOL||header.networkprotocol!=engine->GetProtocolVersion())return luaL_error(L,"Demo protocol does not match this port build");
+                command="playdemo \""+path+"\"\n";
+            }else return luaL_error(L,"Unknown local library action");
+            SetActive(false);GameUI().HideGameUI();engine->ClientCmd_Unrestricted(command.c_str());return 0;
+        }
         if(!strcmp(op,"Find")){
             const char *pattern=luaL_checkstring(L,2);std::string safe;if(!glua::Runtime::Normalize("",pattern,safe))return luaL_error(L,"Invalid menu search path");
-            std::set<std::string> files,dirs;FileFindHandle_t handle;
-            const char *name=g_pFullFileSystem->FindFirstEx(safe.c_str(),"GAME",&handle);
-            for(;name;name=g_pFullFileSystem->FindNext(handle))if(strcmp(name,".")&&strcmp(name,".."))(g_pFullFileSystem->FindIsDirectory(handle)?dirs:files).insert(name);
+            const char *realm=luaL_optstring(L,3,"GAME");if(strcmp(realm,"GAME")&&strcmp(realm,"MOD"))return luaL_error(L,"Unsupported menu search path ID");
+            const bool newest=!strcmp(luaL_optstring(L,4,"nameasc"),"datedesc");
+            std::set<std::string> unique,dirs;FileFindHandle_t handle;
+            const char *name=g_pFullFileSystem->FindFirstEx(safe.c_str(),realm,&handle);
+            for(;name;name=g_pFullFileSystem->FindNext(handle))if(strcmp(name,".")&&strcmp(name,".."))(g_pFullFileSystem->FindIsDirectory(handle)?dirs:unique).insert(name);
             if(handle!=FILESYSTEM_INVALID_FIND_HANDLE)g_pFullFileSystem->FindClose(handle);
+            std::vector<std::string> files(unique.begin(),unique.end());
+            const size_t slash=safe.find_last_of('/');const std::string folder=slash==std::string::npos?"":safe.substr(0,slash+1);
+            if(newest){
+                std::map<std::string,long> times;
+                for(const auto &file:files)times[file]=g_pFullFileSystem->GetFileTime((folder+file).c_str(),realm);
+                std::sort(files.begin(),files.end(),[&](const std::string &a,const std::string &b){return times[a]==times[b]?a<b:times[a]>times[b];});
+            }
             lua_newtable(L);int i=0;for(const auto &s:files){lua_pushstring(L,s.c_str());lua_rawseti(L,-2,++i);}
             lua_newtable(L);i=0;for(const auto &s:dirs){lua_pushstring(L,s.c_str());lua_rawseti(L,-2,++i);}return 2;
         }

@@ -1078,6 +1078,7 @@ private:
 // The icon grid. Headers take a row of their own; the icons are a pool of CMDLPanels that
 // follow the visible cells, so only what is on screen is loaded and rendered.
 #include "gmp_spawn_icon.inl"
+#include "gmp_icon_label.h"
 
 class CGMPSpawnGrid : public CGMPDragPanel
 {
@@ -1177,12 +1178,7 @@ public:
 				// Not in the mounted content: show the file name instead of an icon.
 				DrawText( m_hFont, place.x, y, place.w, place.h, V_UnqualifiedFileName( item.model.Get() ), Color( 150, 60, 60, 255 ), true );
 			}
-			else if ( !item.text.IsEmpty() )
-			{
-				// The icon panel stops above this strip (UpdateCells), so the label is not covered.
-				const int labelTall = vgui::surface()->GetFontTall( m_hFont ) * 3 / 2;
-				DrawText( m_hFont, place.x, y + place.h - labelTall, place.w, labelTall, item.text.Get(), Color( 40, 40, 40, 255 ), true );
-			}
+
 			if ( !item.file.IsEmpty() )
 			{
 				// Delete corner: the icon panel starts below it (UpdateCells), or it would cover it.
@@ -1210,21 +1206,20 @@ public:
             const bool hover=mx>=p.x&&mx<p.x+p.w&&my>=y&&my<y+p.h;
             const bool prop=!Q_strnicmp(item.command.Get(),"gmp_spawn ",10);
             const int texture=prop?(hover?m_PropHover:0):(hover?m_OverlayHover:m_OverlayNormal);
-            if(!texture)continue;
             vgui::surface()->DrawSetColor(255,255,255,255);vgui::surface()->DrawSetTexture(texture);
-            if(prop){
+            if(prop&&texture){
                 // Original GWEN source rect (4,4,56,56), 5px border in a 64px atlas.
                 int x[]={p.x,p.x+5,p.x+p.w-5,p.x+p.w},ys[]={y,y+5,y+p.h-5,y+p.h};
                 float uv[]={4.f/64,9.f/64,55.f/64,60.f/64};
                 for(int row=0;row<3;++row)for(int col=0;col<3;++col)
                     vgui::surface()->DrawTexturedSubRect(x[col],ys[row],x[col+1],ys[row+1],uv[col],uv[row],uv[col+1],uv[row+1]);
-            }else{
+            }else if(!prop&&texture){
                 vgui::surface()->DrawTexturedRect(p.x,y,p.x+p.w,y+p.h);
-                if(!hover&&!item.text.IsEmpty()){
-                    const int tall=vgui::surface()->GetFontTall(m_hFont);
-                    DrawText(m_hFont,p.x+1,y+p.h-tall-8,p.w,tall,item.text.Get(),Color(0,0,0,255),true);
-                    DrawText(m_hFont,p.x,y+p.h-tall-9,p.w,tall,item.text.Get(),Color(255,255,255,255),true);
-                }
+            }
+            if(!prop&&!item.text.IsEmpty()){
+                const int tall=vgui::surface()->GetFontTall(m_hFont);
+                // One final label pass, inside the card; no legacy strip underneath.
+                DrawText(m_hFont,p.x+5,y+p.h-tall-9,p.w-10,tall,item.text.Get(),texture?Color(255,255,255,255):Color(40,40,40,255),true);
             }
             // Keep native save/delete controls above the decorative original overlay.
             if(!item.file.IsEmpty()){
@@ -1298,10 +1293,10 @@ private:
 				m_Cells[c].item = place.item;
 				place.missing = !LoadIcon( m_Cells[c].panel, ( *m_pItems )[place.item] );
 			}
-			const int inset = MAX( 2, m_nGap / 2 );
-			const int labelTall = ( *m_pItems )[place.item].text.IsEmpty() ? 0 : vgui::surface()->GetFontTall( m_hFont ) * 3 / 2;
+            const bool prop=!Q_strnicmp((*m_pItems)[place.item].command.Get(),"gmp_spawn ",10);
+            const int inset=prop?0:4; // Original SpawnIcon fills its cell; ContentIcon image is inset.
 			const int topTall = ( *m_pItems )[place.item].file.IsEmpty() ? 0 : DeleteSize( place );
-			m_Cells[c].panel->SetBounds( place.x + inset, place.y - m_nScroll + inset + topTall, place.w - 2 * inset, place.h - 2 * inset - labelTall - topTall );
+			m_Cells[c].panel->SetBounds( place.x + inset, place.y - m_nScroll + inset + topTall, place.w - 2 * inset, place.h - 2 * inset - topTall );
 			m_Cells[c].panel->SetVisible( !place.missing );
 		}
 		for ( int c = 0; c < m_Cells.Count(); c++ )
@@ -1369,6 +1364,7 @@ private:
 	{
 		wchar_t wide[128];
 		g_pVGuiLocalize->ConvertANSIToUnicode( text, wide, sizeof( wide ) );
+        GMP_FitIconLabel(wide,ARRAYSIZE(wide),MAX(0,w-4),[&](wchar_t c){return vgui::surface()->GetCharacterWidth(font,c);});
 		int tw, th;
 		vgui::surface()->GetTextSize( font, wide, tw, th );
 		vgui::surface()->DrawSetTextFont( font );

@@ -60,10 +60,21 @@ foreach(original IN LISTS GMOD_TOOL_ORIGINALS)
   endif()
 endforeach()
 set_source_files_properties(${GMOD_TOOL_ORIGINALS} PROPERTIES MACOSX_PACKAGE_LOCATION Resources/original_tool)
+set(GMOD_LOCAL_ORIGINALS
+  "${CMAKE_SOURCE_DIR}/deps/garrysmod/garrysmod/lua/includes/util/workshop_files.lua"
+  "${CMAKE_SOURCE_DIR}/deps/garrysmod/garrysmod/lua/menu/menu_dupe.lua"
+  "${CMAKE_SOURCE_DIR}/deps/garrysmod/garrysmod/lua/menu/menu_demo.lua"
+  "${CMAKE_SOURCE_DIR}/deps/garrysmod/garrysmod/lua/menu/menu_save.lua")
+foreach(original IN LISTS GMOD_LOCAL_ORIGINALS)
+  if(NOT EXISTS "${original}")
+    message(FATAL_ERROR "Missing pinned local library Lua: run tools/bootstrap.py --only garrysmod")
+  endif()
+endforeach()
+set_source_files_properties(${GMOD_LOCAL_ORIGINALS} PROPERTIES MACOSX_PACKAGE_LOCATION Resources/original_local)
 file(GLOB GMOD_APP_ICONS "${CMAKE_SOURCE_DIR}/app/icons/*.png")
 set_source_files_properties(${GMOD_APP_ICONS} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 file(GLOB GMOD_TOUCH_TEXTURES "${CMAKE_SOURCE_DIR}/resources/touch/*.vtf")
-add_executable(GModPort MACOSX_BUNDLE app/ios_main.mm ${GMOD_APP_ICONS} ${GMOD_MENU_LUA} ${GMOD_TOOL_ORIGINALS} "${SOURCE_MODULE_TABLE}" resources/gameinfo.txt resources/touch_default.cfg resources/gmp_bindings.cfg resources/gmp_graphics.cfg resources/gmp_gamepad.cfg resources/gmp_micro.cfg resources/gmp_micro_gamepad.cfg resources/weapon_physgun.txt resources/gmod_tool.txt resources/DebugOptions.txt resources/ui/GameMenu.res resources/ui/GameLogo.res ${GMOD_TOUCH_TEXTURES})
+add_executable(GModPort MACOSX_BUNDLE app/ios_main.mm ${GMOD_APP_ICONS} ${GMOD_MENU_LUA} ${GMOD_TOOL_ORIGINALS} ${GMOD_LOCAL_ORIGINALS} "${SOURCE_MODULE_TABLE}" resources/gameinfo.txt resources/touch_default.cfg resources/gmp_bindings.cfg resources/gmp_graphics.cfg resources/gmp_gamepad.cfg resources/gmp_micro.cfg resources/gmp_micro_gamepad.cfg resources/weapon_physgun.txt resources/gmod_tool.txt resources/DebugOptions.txt resources/ui/GameMenu.res resources/ui/GameLogo.res ${GMOD_TOUCH_TEXTURES})
 set_source_files_properties(app/ios_main.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 set_source_files_properties(resources/gameinfo.txt resources/touch_default.cfg resources/gmp_bindings.cfg resources/gmp_graphics.cfg resources/gmp_gamepad.cfg resources/gmp_micro.cfg resources/gmp_micro_gamepad.cfg resources/weapon_physgun.txt resources/gmod_tool.txt resources/DebugOptions.txt resources/ui/GameMenu.res resources/ui/GameLogo.res PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 set_source_files_properties(${GMOD_TOUCH_TEXTURES} PROPERTIES MACOSX_PACKAGE_LOCATION Resources/touch)

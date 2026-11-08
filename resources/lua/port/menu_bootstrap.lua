@@ -34,7 +34,7 @@ VERSIONSTR='GModPort'
 NETVERSIONSTR=tostring(native('Protocol'));BRANCH='iOS port'
 file={Read=bind('Read'),Find=bind('Find'),Exists=bind('Exists')}
 local function unsupported(name) return function() error(name..' is not implemented by this iOS engine build',2) end end
-file.Delete=unsupported('Workshop file deletion')
+file.Delete=unsupported('Workshop file deletion') -- replaced by bounded local-file operations below
 local cookies
 local function loadCookies()
     if cookies then return end
@@ -56,7 +56,7 @@ function GetAPIManifest(callback) native('Log','Online news manifest is unavaila
 function LoadAddonPresets() return native('DataRead','addon_presets.json') end
 function SaveAddonPresets(s) native('DataWrite','addon_presets.json',s) end
 function OpenFolder(name) native('OpenFolder',name) end
-function OpenProblemsPanel() native('Notify','Menu uses original Facepunch HTML and Lua. Steam Workshop, saves, dupes, demos and other gamemodes still require engine bindings.') end
+function OpenProblemsPanel() native('Notify','Menu uses original Facepunch HTML and Lua. Local dupes, saves and demos use native file operations. Steam Workshop and other gamemodes require further engine bindings.') end
 steamworks=setmetatable({}, {__index=function(_,name) return unsupported('steamworks.'..name) end})
 for _,name in ipairs({'ws_dupe','ws_save','addon','demo'}) do
     _G[name]=setmetatable({}, {__index=function(_,method) return unsupported(name..'.'..method) end})
@@ -166,6 +166,8 @@ function HTML:SetSize(w,h) methods.SetSize(self,w,h);if self.handle then native(
 
 include('includes/util/javascript_util.lua')
 include('menu/getmaps.lua')
+nativeLocal=native
+include('port/local_content.lua')
 include('menu/mainmenu.lua')
 local reported={}
 local function report(err)
@@ -230,6 +232,7 @@ function port.MenuTick()
         width,height=ScrW(),ScrH()
         if IsValid(pnlMainMenu) then pnlMainMenu:SetSize(width,height);pnlMainMenu.HTML:SetSize(width,height) end
     end
+    port.LocalContentTick()
     if IsValid(pnlMainMenu) and pnlMainMenu.HTML.ready then
         local ok,err=pcall(pnlMainMenu.Paint,pnlMainMenu);if not ok then report(err) end
         native('BackgroundFrame',pnlMainMenu.HTML.handle,JSON.encode(drawList),width,height)

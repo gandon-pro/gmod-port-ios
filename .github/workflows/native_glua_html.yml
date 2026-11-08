@@ -49,6 +49,7 @@ jobs:
           cmake --build build-native-host --parallel 3
           ctest --test-dir build-native-host --output-on-failure
           python3 tests/glua/test_icon_package.py
+          python3 tests/test_local_content.py
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
