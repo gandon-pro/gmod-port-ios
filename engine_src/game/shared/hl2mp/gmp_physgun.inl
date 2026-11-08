@@ -1083,7 +1083,8 @@ class CGMPSpawnGrid : public CGMPDragPanel
 {
 	DECLARE_CLASS_SIMPLE( CGMPSpawnGrid, CGMPDragPanel );
 public:
-	CGMPSpawnGrid( vgui::Panel *parent ) : BaseClass( parent, "SpawnGrid" ), m_pItems( NULL ), m_hFont( 0 ), m_hHeaderFont( 0 ) {}
+	CGMPSpawnGrid( vgui::Panel *parent ) : BaseClass( parent, "SpawnGrid" ), m_pItems( NULL ), m_hFont( 0 ), m_hHeaderFont( 0 ),m_OverlayNormal(0),m_OverlayHover(0),m_PropHover(0),m_OverlaysLoaded(false) {}
+    ~CGMPSpawnGrid(){for(int texture:{m_OverlayNormal,m_OverlayHover,m_PropHover})if(texture)vgui::surface()->DestroyTextureID(texture);}
 
 	void SetFonts( vgui::HFont font, vgui::HFont header ) { m_hFont = font; m_hHeaderFont = header; InvalidateLayout(); }
 
@@ -1192,6 +1193,47 @@ public:
 			}
 		}
 	}
+
+    void PaintOver() override
+    {
+        if(!m_OverlaysLoaded){
+            m_OverlaysLoaded=true;
+            m_OverlayNormal=GMP_LoadPNGTexture("materials/gui/ContentIcon-normal.png");
+            m_OverlayHover=GMP_LoadPNGTexture("materials/gui/ContentIcon-hovered.png");
+            m_PropHover=GMP_LoadPNGTexture("materials/gui/sm_hover.png");
+        }
+        int mx,my;vgui::input()->GetCursorPos(mx,my);ScreenToLocal(mx,my);
+        for(int i=0;m_pItems&&i<m_Places.Count();++i){
+            const Place &p=m_Places[i];const GMPSpawnItem &item=(*m_pItems)[p.item];
+            if(item.model.IsEmpty()||!IsShown(p,GetTall()))continue;
+            const int y=p.y-m_nScroll;
+            const bool hover=mx>=p.x&&mx<p.x+p.w&&my>=y&&my<y+p.h;
+            const bool prop=!Q_strnicmp(item.command.Get(),"gmp_spawn ",10);
+            const int texture=prop?(hover?m_PropHover:0):(hover?m_OverlayHover:m_OverlayNormal);
+            if(!texture)continue;
+            vgui::surface()->DrawSetColor(255,255,255,255);vgui::surface()->DrawSetTexture(texture);
+            if(prop){
+                // Original GWEN source rect (4,4,56,56), 5px border in a 64px atlas.
+                int x[]={p.x,p.x+5,p.x+p.w-5,p.x+p.w},ys[]={y,y+5,y+p.h-5,y+p.h};
+                float uv[]={4.f/64,9.f/64,55.f/64,60.f/64};
+                for(int row=0;row<3;++row)for(int col=0;col<3;++col)
+                    vgui::surface()->DrawTexturedSubRect(x[col],ys[row],x[col+1],ys[row+1],uv[col],uv[row],uv[col+1],uv[row+1]);
+            }else{
+                vgui::surface()->DrawTexturedRect(p.x,y,p.x+p.w,y+p.h);
+                if(!hover&&!item.text.IsEmpty()){
+                    const int tall=vgui::surface()->GetFontTall(m_hFont);
+                    DrawText(m_hFont,p.x+1,y+p.h-tall-8,p.w,tall,item.text.Get(),Color(0,0,0,255),true);
+                    DrawText(m_hFont,p.x,y+p.h-tall-9,p.w,tall,item.text.Get(),Color(255,255,255,255),true);
+                }
+            }
+            // Keep native save/delete controls above the decorative original overlay.
+            if(!item.file.IsEmpty()){
+                int size=DeleteSize(p);vgui::surface()->DrawSetColor(200,70,60,255);
+                vgui::surface()->DrawFilledRect(p.x+p.w-size,y,p.x+p.w,y+size);
+                DrawText(m_hFont,p.x+p.w-size,y,size,size,"X",Color(255,255,255,255),true);
+            }
+        }
+    }
 
 protected:
 	virtual void OnScrolled( void )
@@ -1340,6 +1382,8 @@ private:
 	CUtlVector<Cell> m_Cells;
 	vgui::HFont m_hFont, m_hHeaderFont;
 	int m_nCell, m_nGap;
+    int m_OverlayNormal,m_OverlayHover,m_PropHover;bool m_OverlaysLoaded;
+
 };
 
 #include "gmp_spawn_tools.inl"
