@@ -447,6 +447,7 @@ CON_COMMAND( gmp_ammo, "GModPort: gmp_ammo <Pistol|SMG1|...|all> - fill an ammo 
 
 #ifdef CLIENT_DLL
 #include "vgui_controls/EditablePanel.h"
+#include "tier1/fmtstr.h"
 #include "vgui/IInput.h"
 #include "vgui/ISurface.h"
 #include "vgui/IScheme.h"
@@ -630,37 +631,17 @@ public:
 };
 EXPOSE_INTERFACE( CGMPPlayerWeaponColorProxy, IMaterialProxy, "PlayerWeaponColor" IMATERIAL_PROXY_INTERFACE_VERSION );
 
-// gmp_weapnext / gmp_weapprev: the touch weapon buttons. Switches straight to the next or previous
-// weapon in slot order, without the HUD selection that invnext/invprev open and +attack confirms.
-static void GMP_CycleWeapon( int dir )
+// Use the engine selector, including slot icons, timeout, attack confirmation and hud_fastswitch.
+CON_COMMAND( gmp_weapnext, "GModPort: open/cycle the native weapon selector forward" )
 {
-	C_BasePlayer *pPlayer = C_BasePlayer::GetLocalPlayer();
-	if ( !pPlayer || !pPlayer->IsAlive() )
-		return;
-	CUtlVector<C_BaseCombatWeapon *> weapons;
-	for ( int i = 0; i < pPlayer->WeaponCount(); i++ )
-	{
-		C_BaseCombatWeapon *pWeapon = pPlayer->GetWeapon( i );
-		if ( !pWeapon || !pWeapon->CanBeSelected() )
-			continue;
-		const int key = pWeapon->GetSlot() * 100 + pWeapon->GetPosition();
-		int at = 0;
-		while ( at < weapons.Count() && weapons[at]->GetSlot() * 100 + weapons[at]->GetPosition() <= key )
-			at++;
-		weapons.InsertBefore( at, pWeapon );
-	}
-	if ( weapons.Count() == 0 )
-		return;
-	const int current = weapons.Find( pPlayer->GetActiveWeapon() );
-	const int next = current < 0 ? 0 : ( current + dir + weapons.Count() ) % weapons.Count();
-	if ( weapons[next] != pPlayer->GetActiveWeapon() )
-	{
-		::input->MakeWeaponSelection( weapons[next] );
-		pPlayer->EmitSound( "Player.WeaponSelectionMoveSlot" );
-	}
+    C_BasePlayer *player = C_BasePlayer::GetLocalPlayer();
+    if ( player && player->IsAlive() ) engine->ClientCmd( "invnext" );
 }
-CON_COMMAND( gmp_weapnext, "GModPort: switch to the next weapon" ) { GMP_CycleWeapon( 1 ); }
-CON_COMMAND( gmp_weapprev, "GModPort: switch to the previous weapon" ) { GMP_CycleWeapon( -1 ); }
+CON_COMMAND( gmp_weapprev, "GModPort: open/cycle the native weapon selector backward" )
+{
+    C_BasePlayer *player = C_BasePlayer::GetLocalPlayer();
+    if ( player && player->IsAlive() ) engine->ClientCmd( "invprev" );
+}
 
 // GMod-style spawn menu: GMod's own spawnlists (settings/spawnlist*/ *.txt) on the left, a grid
 // of live model icons on the right, a Weapons tab. Drag scrolls, a tap spawns.
@@ -668,6 +649,7 @@ CON_COMMAND( gmp_weapprev, "GModPort: switch to the previous weapon" ) { GMP_Cyc
 struct GMPSpawnItem
 {
 	CUtlString model;	// empty: a header row
+	CUtlString icon;	// original materials/ PNG, when supplied by content metadata
 	CUtlString text;	// header text or the label under the icon
 	CUtlString command;	// client command run on tap; on a header it makes the header a button
 	CUtlString file;	// Dupes / Saves: the file the corner X deletes (with its .txt)
@@ -810,6 +792,7 @@ static void GMP_LoadSpawnMenu( void )
 			{
 				GMPSpawnItem item;
 				item.skin = sub->GetInt( "skin" );
+                item.icon = sub->GetString( "material" );
 				const char *type = sub->GetString( "type" );
 				if ( !Q_stricmp( type, "model" ) && sub->GetString( "model" )[0] )
 				{
@@ -839,6 +822,7 @@ static void GMP_LoadSpawnMenu( void )
 	{
 		GMPSpawnItem item;
 		item.model = s_GMPWeaponTable[i].model;
+        item.icon = CFmtStr("entities/%s.png",s_GMPWeaponTable[i].cls).Access();
 		item.text = s_GMPWeaponTable[i].name;
 		char cmd[64];
 		Q_snprintf( cmd, sizeof( cmd ), "gmp_give %s", s_GMPWeaponTable[i].cls );
@@ -854,6 +838,7 @@ static void GMP_LoadSpawnMenu( void )
 		if ( s_GMPEntityTable[i].cls )
 		{
 			item.model = s_GMPEntityTable[i].model;
+            item.icon = CFmtStr("entities/%s.png",s_GMPEntityTable[i].cls).Access();
 			char cmd[64];
 			Q_snprintf( cmd, sizeof( cmd ), "gmp_ent %s", s_GMPEntityTable[i].cls );
 			item.command = cmd;
@@ -1092,6 +1077,8 @@ private:
 
 // The icon grid. Headers take a row of their own; the icons are a pool of CMDLPanels that
 // follow the visible cells, so only what is on screen is loaded and rendered.
+#include "gmp_spawn_icon.inl"
+
 class CGMPSpawnGrid : public CGMPDragPanel
 {
 	DECLARE_CLASS_SIMPLE( CGMPSpawnGrid, CGMPDragPanel );
@@ -1115,10 +1102,12 @@ public:
 		BaseClass::PerformLayout();
 		int w, h;
 		GetSize( w, h );
-		m_nCell = MAX( 64, ScreenHeight() / 8 );
-		m_nGap = m_nCell / 14;
+		bool props = false;
+        for(int i=0;m_pItems&&i<m_pItems->Count();++i)if(!(*m_pItems)[i].model.IsEmpty()){props=!Q_strnicmp((*m_pItems)[i].command.Get(),"gmp_spawn ",10);break;}
+        // SpawnIcon is 64x64; ContentIcon is 128x128 in the pinned Sandbox source.
+        m_nCell = props ? 64 : 128;
+        m_nGap = 4;
 		const int cols = MAX( 1, ( w - m_nGap ) / ( m_nCell + m_nGap ) );
-		m_nCell = ( w - m_nGap ) / cols - m_nGap;	// fill the width
 		m_Places.RemoveAll();
 		int col = 0, y = m_nGap;
 		const int headerTall = vgui::surface()->GetFontTall( m_hHeaderFont ) * 3 / 2;
@@ -1233,7 +1222,7 @@ protected:
 
 private:
 	struct Place { int item, x, y, w, h; bool missing; };
-	struct Cell { CMDLPanel *panel; int item; };
+	struct Cell { CGMPSpawnIconPanel *panel; int item; };
 
 	void UpdateCells( void )
 	{
@@ -1258,7 +1247,7 @@ private:
 				c = CellOf( -1 );
 				if ( c < 0 )
 				{
-					Cell cell = { new CMDLPanel( this, "SpawnIcon" ), -1 };
+					Cell cell = { new CGMPSpawnIconPanel( this ), -1 };
 					cell.panel->SetMouseInputEnabled( false );
 					cell.panel->SetKeyBoardInputEnabled( false );
 					cell.panel->SetBackgroundColor( 255, 255, 255 );
@@ -1278,8 +1267,21 @@ private:
 				m_Cells[c].panel->SetVisible( false );
 	}
 
-	static bool LoadIcon( CMDLPanel *panel, const GMPSpawnItem &item )
-	{
+	static bool LoadIcon( CGMPSpawnIconPanel *panel, const GMPSpawnItem &item )
+    {
+        panel->ClearImage();
+        if(!item.icon.IsEmpty()&&!strstr(item.icon.Get(),"..")){
+            char path[MAX_PATH];Q_snprintf(path,sizeof(path),"materials/%s",item.icon.Get());
+            if(panel->LoadImage(path))return true;
+        }
+        // Only consume an installed cache hit. Missing/invalid images use the native model preview.
+        char model[MAX_PATH],path[MAX_PATH];Q_strncpy(model,item.model.Get(),sizeof(model));
+        V_FixSlashes(model);Q_strlower(model);V_StripExtension(model,model,sizeof(model));
+        if(!strstr(model,"..")&&!Q_strnicmp(model,"models/",7)){
+            if(item.skin>0)Q_snprintf(path,sizeof(path),"materials/spawnicons/%s_skin%d.png",model,item.skin);
+            else Q_snprintf(path,sizeof(path),"materials/spawnicons/%s.png",model);
+            if(panel->LoadImage(path))return true;
+        }
 		MDLHandle_t hMDL = mdlcache->FindMDL( item.model.Get() );
 		mdlcache->GetStudioHdr( hMDL );	// loads it; a missing file becomes the error model
 		const bool ok = !mdlcache->IsErrorModel( hMDL );

@@ -16,7 +16,7 @@ with tempfile.TemporaryDirectory() as tmp:
           '-fno-strict-aliasing','-fsigned-char','-Wno-register','-Wno-c++11-narrowing','-Wno-deprecated-declarations',
           '-Wno-inconsistent-missing-override']
     for folder,files in [('gameui',['gameui/BasePanel.cpp','gameui/GameUI_Interface.cpp']),
-                         ('game/client',['game/shared/hl2mp/weapon_physcannon.cpp']),
+                         ('game/client',['game/shared/hl2mp/weapon_physcannon.cpp','game/client/hl2/hud_weaponselection.cpp','game/client/hl2/hud_health.cpp','game/client/hl2/hud_battery.cpp','game/client/hl2/hud_ammo.cpp']),
                          ('game/server',['game/shared/hl2mp/weapon_physcannon.cpp'])]:
         module=next(p for p in projects if p['folder']==folder and p['kind']=='module')
         flags=list(base)

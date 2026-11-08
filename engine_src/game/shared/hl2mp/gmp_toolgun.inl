@@ -1228,7 +1228,9 @@ void CWeaponGMPToolGun::OtherTool( CBasePlayer *pOwner, const trace_t &tr, int b
 #endif // !CLIENT_DLL
 
 #ifdef CLIENT_DLL
-// Tool name and controls in the top-left corner while the tool gun is out (CHudWeapon calls Redraw).
+#include "gmp_tool_screen.inl"
+static ConVar gmod_drawhelp("gmod_drawhelp","1",FCVAR_ARCHIVE,"Display the tool gun HUD");
+// Native adaptation of the pinned Sandbox cl_init.lua tool HUD.
 void CWeaponGMPToolGun::Redraw( void )
 {
 	BaseClass::Redraw();
@@ -1240,71 +1242,58 @@ void CWeaponGMPToolGun::Redraw( void )
 	if ( tool < 0 )
 		tool = GMP_ToolIndex( "weld" );
 	GMP_ToolSync( this, tool );
+	if ( !gmod_drawhelp.GetBool() || pOwner->IsInAVehicle() ) return;
 
-	static vgui::HFont s_hTitle = vgui::INVALID_FONT, s_hText = vgui::INVALID_FONT;
-	static int s_iFontTall = 0;
-	const int h = ScreenHeight();
-	if ( s_iFontTall != h )
-	{
-		vgui::IScheme *pScheme = vgui::scheme()->GetIScheme( vgui::scheme()->GetDefaultScheme() );
-		const char *family = pScheme ? vgui::surface()->GetFontFamilyName( pScheme->GetFont( "Default", false ) ) : NULL;
-		if ( !family || !*family )
-			family = "Verdana";
-		s_hTitle = vgui::surface()->CreateFont();
-		vgui::surface()->SetFontGlyphSet( s_hTitle, family, h / 22, 800, 0, 0, vgui::ISurface::FONTFLAG_ANTIALIAS );
-		s_hText = vgui::surface()->CreateFont();
-		vgui::surface()->SetFontGlyphSet( s_hText, family, h / 40, 600, 0, 0, vgui::ISurface::FONTFLAG_ANTIALIAS );
-		s_iFontTall = h;
-	}
 
-	const GMPToolDef &def = s_GMPToolDefs[tool];
-	const int stage = m_iStage;
-	const char *left = def.left;
-	if ( stage == 1 && def.left1 )
-		left = def.left1;
-	else if ( stage == 2 && def.left2 )
-		left = def.left2;
-	else if ( stage >= 3 )
-		left = "Select an object to finish the Pulley constraint";
-	char lines[3][160];
-	int count = 0;
-	if ( left )
-		Q_snprintf( lines[count++], sizeof( lines[0] ), "Fire: %s", left );
-	if ( def.right && ( stage == 0 || !Q_stricmp( def.mode, "rope" ) ) )
-		Q_snprintf( lines[count++], sizeof( lines[0] ), "Alt fire: %s", def.right );
-	else if ( stage > 0 )
-		Q_snprintf( lines[count++], sizeof( lines[0] ), "Alt fire: cancel" );
-	if ( def.reload )
-		Q_snprintf( lines[count++], sizeof( lines[0] ), "Reload: %s", def.reload );
+    static vgui::HFont fonts[3]={0,0,0};
+    static int fontHeight=0, gradient=0;
+    const float scale=ScreenHeight()/1080.0f;
+    if(fontHeight!=ScreenHeight()){
+        const int sizes[]={80,24,17};
+        for(int i=0;i<3;++i){
+            if(!fonts[i])fonts[i]=vgui::surface()->CreateFont();
+            if(!vgui::surface()->SetFontGlyphSet(fonts[i],"Roboto Bk",MAX(1,int(sizes[i]*scale)),1000,0,0,vgui::ISurface::FONTFLAG_ANTIALIAS)){
+                vgui::surface()->SetFontGlyphSet(fonts[i],"Helvetica",MAX(1,int(sizes[i]*scale)),1000,0,0,vgui::ISurface::FONTFLAG_ANTIALIAS);
+                Warning("Tool HUD: Roboto Bk unavailable; using Helvetica\n");
+            }
+        }
+        fontHeight=ScreenHeight();
+    }
+    if(!gradient){gradient=vgui::surface()->CreateNewTextureID();vgui::surface()->DrawSetTextureFile(gradient,"gui/gradient",1,false);}
+    const GMPToolDef &def=s_GMPToolDefs[tool];
+    const char *left=def.left;
+    if(m_iStage==1&&def.left1)left=def.left1;
+    else if(m_iStage==2&&def.left2)left=def.left2;
+    else if(m_iStage>=3)left="Select an object to finish the Pulley constraint";
+    char lines[3][256];int count=0;
+    if(left)Q_snprintf(lines[count++],sizeof(lines[0]),"%s",left);
+    if(def.right&&(m_iStage==0||!Q_stricmp(def.mode,"rope")))Q_snprintf(lines[count++],sizeof(lines[0]),"%s",def.right);
+    else if(m_iStage>0)Q_snprintf(lines[count++],sizeof(lines[0]),"Cancel");
+    if(def.reload)Q_snprintf(lines[count++],sizeof(lines[0]),"%s",def.reload);
+    char key[128];Q_snprintf(key,sizeof(key),"#tool.%s.name",def.mode);
+    const char *name=GMP_ToolPhrase(key);if(name==key)name=def.name;
+    wchar_t title[256],description[512];g_pVGuiLocalize->ConvertANSIToUnicode(name,title,sizeof(title));
+    Q_snprintf(key,sizeof(key),"#tool.%s.desc",def.mode);const char *desc=GMP_ToolPhrase(key);
+    g_pVGuiLocalize->ConvertANSIToUnicode(desc==key?"":desc,description,sizeof(description));
+    auto text=[&](vgui::HFont font,int x,int y,const wchar_t *value,int shadow){
+        vgui::surface()->DrawSetTextFont(font);
+        vgui::surface()->DrawSetTextColor(0,0,0,255);vgui::surface()->DrawSetTextPos(x+shadow,y+shadow);vgui::surface()->DrawPrintText(value,wcslen(value));
+        vgui::surface()->DrawSetTextColor(240,240,240,255);vgui::surface()->DrawSetTextPos(x,y);vgui::surface()->DrawPrintText(value,wcslen(value));
+    };
+    const int x=int(50*scale),y=int(40*scale),pad=MAX(1,int(8*scale));
+    const int titleH=vgui::surface()->GetFontTall(fonts[0]),descH=vgui::surface()->GetFontTall(fonts[1]);
+    const int helpH=vgui::surface()->GetFontTall(fonts[2]),helpY=y+titleH+descH+pad;
+    vgui::surface()->DrawSetTexture(gradient);vgui::surface()->DrawSetColor(10,10,10,180);
+    vgui::surface()->DrawTexturedRect(0,y-pad,int(600*scale),helpY);
+    text(fonts[0],x,y,title,MAX(1,int(2*scale)));text(fonts[1],x,y+titleH,description,1);
+    vgui::surface()->DrawSetColor(10,10,10,230);vgui::surface()->DrawTexturedRect(0,helpY,int(600*scale),helpY+helpH*count+pad);
+    const char *buttons[]={"LMB","RMB","R"};
+    for(int i=0;i<count;++i){
+        wchar_t wide[256];g_pVGuiLocalize->ConvertANSIToUnicode(lines[i],wide,sizeof(wide));
+        text(fonts[2],x+int(32*scale),helpY+pad/2+i*helpH,wide,1);
+        wchar_t button[8];const char *label=(i==count-1&&def.reload)?"R":buttons[MIN(i,2)];
+        g_pVGuiLocalize->ConvertANSIToUnicode(label,button,sizeof(button));text(fonts[2],x,helpY+pad/2+i*helpH,button,1);
+    }
 
-	wchar_t title[64], text[3][160];
-	g_pVGuiLocalize->ConvertANSIToUnicode( def.name, title, sizeof( title ) );
-	int w, th, lh;
-	vgui::surface()->GetTextSize( s_hTitle, title, w, th );
-	for ( int i = 0; i < count; i++ )
-	{
-		g_pVGuiLocalize->ConvertANSIToUnicode( lines[i], text[i], sizeof( text[i] ) );
-		int lw;
-		vgui::surface()->GetTextSize( s_hText, text[i], lw, lh );
-		w = MAX( w, lw );
-	}
-	lh = vgui::surface()->GetFontTall( s_hText );
-	const int pad = h / 90, x = h / 40, y = h / 40;
-	vgui::surface()->DrawSetColor( 0, 0, 0, 170 );
-	vgui::surface()->DrawFilledRect( x, y, x + w + pad * 2, y + th + lh * count + pad * 2 );
-	vgui::surface()->DrawSetColor( 0, 150, 255, 255 );
-	vgui::surface()->DrawFilledRect( x, y, x + w + pad * 2, y + pad / 2 );
-
-	vgui::surface()->DrawSetTextFont( s_hTitle );
-	vgui::surface()->DrawSetTextColor( 255, 255, 255, 255 );
-	vgui::surface()->DrawSetTextPos( x + pad, y + pad );
-	vgui::surface()->DrawPrintText( title, wcslen( title ) );
-	vgui::surface()->DrawSetTextFont( s_hText );
-	for ( int i = 0; i < count; i++ )
-	{
-		vgui::surface()->DrawSetTextColor( 220, 220, 220, 255 );
-		vgui::surface()->DrawSetTextPos( x + pad, y + pad + th + lh * i );
-		vgui::surface()->DrawPrintText( text[i], wcslen( text[i] ) );
-	}
 }
 #endif // CLIENT_DLL
