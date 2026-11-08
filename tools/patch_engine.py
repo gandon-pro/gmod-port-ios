@@ -155,6 +155,188 @@ change('materialsystem/shaderapidx9/shaderdevicedx8.cpp',
 change('appframework/sdlmgr.cpp', '\tretval = SDL_GL_GetProcAddress(fn);',
        '#if defined(SOURCE_IOS)\n\textern void* GModPort_GLProcAddress(const char* name);\n\tretval = GModPort_GLProcAddress(fn);\n#else\n\tretval = SDL_GL_GetProcAddress(fn);\n#endif')
 
+# GLES3 exposes this core buffer query; retain it in Source's procedure table.
+change('public/togles/linuxwin/glfuncs.h',
+       'GL_FUNC_VOID(OpenGL,true,glGetIntegerv,(GLenum a,GLint *b),(a,b))',
+       'GL_FUNC_VOID(OpenGL,true,glGetIntegerv,(GLenum a,GLint *b),(a,b))\n'
+       'GL_FUNC_VOID(OpenGL,true,glGetBufferParameteriv,(GLenum a,GLenum b,GLint *c),(a,b,c))')
+
+# Keep the failed map from poisoning the lock state. Use the existing bounded
+# CPU staging + Unlock/SubData path only when the real GPU store is valid.
+change('togles/linuxwin/cglmbuffer.cpp',
+       '\t\tmapPtr = (char*)gGL->glMapBufferRange( m_buffGLTarget, pParams->m_nOffset, pParams->m_nSize, parms);',
+       '\t\tmapPtr = (char*)gGL->glMapBufferRange( m_buffGLTarget, pParams->m_nOffset, pParams->m_nSize, parms);\n'
+       '#if defined(SOURCE_IOS)\n'
+       '\t\tif ( !mapPtr )\n'
+       '\t\t{\n'
+       '\t\t\tGLenum mapError = gGL->glGetError();\n'
+       '\t\t\tGLint bytes = 0, mapped = 0, bound = 0;\n'
+       '\t\t\tgGL->glGetBufferParameteriv(m_buffGLTarget, GL_BUFFER_SIZE, &bytes);\n'
+       '\t\t\tgGL->glGetBufferParameteriv(m_buffGLTarget, GL_BUFFER_MAPPED, &mapped);\n'
+       '\t\t\tGLenum binding = m_type == kGLMVertexBuffer ? GL_ARRAY_BUFFER_BINDING : m_type == kGLMIndexBuffer ? GL_ELEMENT_ARRAY_BUFFER_BINDING : m_type == kGLMUniformBuffer ? GL_UNIFORM_BUFFER_BINDING : GL_PIXEL_UNPACK_BUFFER_BINDING;\n'
+       '\t\t\tgGL->glGetIntegerv(binding, &bound);\n'
+       '\t\t\tbool canStage = !g_bDisableStaticBuffer && mapError != GL_OUT_OF_MEMORY && !mapped && GLuint(bound) == m_nHandle && bytes >= 0 &&\n'
+       '\t\t\t\tpParams->m_nOffset <= uint(bytes) && pParams->m_nSize <= uint(bytes) - pParams->m_nOffset && pParams->m_nSize <= GL_STATIC_BUFFER_SIZE &&\n'
+       '\t\t\t\t(m_type == kGLMVertexBuffer || m_type == kGLMIndexBuffer);\n'
+       '\t\t\tstatic unsigned reports = 0;\n'
+       '\t\t\tif ( reports++ < 8 ) Warning("GMP buffer: map failed error=0x%04x handle=%u bound=%d target=0x%04x allocated=%d requested=%u offset=%u mapped=%d staging=%d\\n", mapError, m_nHandle, bound, m_buffGLTarget, bytes, pParams->m_nSize, pParams->m_nOffset, mapped, canStage);\n'
+       '\t\t\tif ( canStage ) { m_pStaticBuffer = m_StaticBuffers[m_type == kGLMVertexBuffer ? 0 : 1]; mapPtr = m_pStaticBuffer; }\n'
+       '\t\t}\n'
+       '#endif')
+change('togles/linuxwin/cglmbuffer.cpp', '\tm_bMapped = true;\n\n\tm_pLastMappedAddress = (float*)resultPtr;',
+       '\tm_bMapped = resultPtr != NULL;\n\n\tm_pLastMappedAddress = (float*)resultPtr;')
+change('togles/linuxwin/cglmbuffer.cpp', '\tchar *resultPtr = NULL;\n\t\n\tif ( m_bMapped )',
+       '\tchar *resultPtr = NULL;\n\t*pAddressOut = NULL;\n\t\n\tif ( m_bMapped )')
+change('materialsystem/shaderapidx9/dynamicvb.h',
+       '\tif ( !IsX360() && !m_pVB && !m_pSysmemBuffer )\n\t\treturn 0;',
+       '\tif ( !IsX360() && !m_pVB && !m_pSysmemBuffer )\n\t{\n'
+       '\t\tWarning("GMP buffer: vertex buffer has no GPU/system storage vertices=%d capacity=%d bytes=%d dynamic=%d\\n", numVerts, m_VertexCount, m_nBufferSize, m_bDynamic);\n'
+       '\t\treturn 0;\n\t}')
+
+# Report the early lock failures too; they otherwise bypass glMapBufferRange.
+change('togles/linuxwin/cglmbuffer.cpp',
+       '\tif ( m_bMapped )\n\t{\n\t\tDXABSTRACT_BREAK_ON_ERROR();\n\t\treturn;\n\t}',
+       '\tif ( m_bMapped )\n\t{\n'
+       '\t\tWarning("GMP buffer: lock rejected: already locked handle=%u offset=%u requested=%u\\n", m_nHandle, pParams->m_nOffset, pParams->m_nSize);\n'
+       '\t\tDXABSTRACT_BREAK_ON_ERROR();\n\t\treturn;\n\t}')
+change('togles/linuxwin/cglmbuffer.cpp',
+       '\tif ( pParams->m_nOffset >= m_nSize )\n\t{\n\t\tDXABSTRACT_BREAK_ON_ERROR();\n\t\treturn;\n\t}',
+       '\tif ( pParams->m_nOffset >= m_nSize )\n\t{\n'
+       '\t\tWarning("GMP buffer: lock rejected: offset outside storage handle=%u offset=%u capacity=%u\\n", m_nHandle, pParams->m_nOffset, m_nSize);\n'
+       '\t\tDXABSTRACT_BREAK_ON_ERROR();\n\t\treturn;\n\t}')
+change('togles/linuxwin/cglmbuffer.cpp',
+       '\tif ( ( pParams->m_nOffset + pParams->m_nSize ) > m_nSize)\n\t{\n\t\tDXABSTRACT_BREAK_ON_ERROR();\n\t\treturn;\n\t}',
+       '\tif ( pParams->m_nSize > m_nSize - pParams->m_nOffset )\n\t{\n'
+       '\t\tWarning("GMP buffer: lock rejected: range outside storage handle=%u offset=%u requested=%u capacity=%u\\n", m_nHandle, pParams->m_nOffset, pParams->m_nSize, m_nSize);\n'
+       '\t\tDXABSTRACT_BREAK_ON_ERROR();\n\t\treturn;\n\t}')
+
+# iOS/ANGLE uses linear presentation and render targets. GLES3 does not expose
+# desktop GL_FRAMEBUFFER_SRGB switching, so use Source's shader-write fallback.
+change('appframework/glmdisplaydb_linuxwin.inl',
+       '        m_info.m_hasGammaWrites = true;\n\tm_info.m_cantAttachSRGB = false;',
+       '#if defined(SOURCE_IOS)\n'
+       '        m_info.m_hasGammaWrites = false;\n        m_info.m_cantAttachSRGB = true;\n'
+       '#else\n        m_info.m_hasGammaWrites = true;\n\tm_info.m_cantAttachSRGB = false;\n#endif')
+change('togles/linuxwin/dxabstract.cpp',
+       '\tpCaps->CanDoSRGBReadFromRTs\t\t=\ttrue;//!glmRendererInfo.m_cantAttachSRGB;',
+       '#if defined(SOURCE_IOS)\n'
+       '\tpCaps->CanDoSRGBReadFromRTs = !glmRendererInfo.m_cantAttachSRGB;\n'
+       '#else\n\tpCaps->CanDoSRGBReadFromRTs\t\t=\ttrue;//!glmRendererInfo.m_cantAttachSRGB;\n#endif')
+change('togles/linuxwin/glmgr.cpp', '\tm_nNumDirtySamplers = 0;\n',
+       '\tm_nNumDirtySamplers = 0;\n\tm_FakeBlendEnableSRGB = false;\n')
+# Initialization/clear-state flushes must not issue the unsupported desktop enum.
+change('public/togles/linuxwin/glmgr.h',
+       'FORCEINLINE void GLContextSet( GLBlendEnableSRGB_t *src )\n{',
+       'FORCEINLINE void GLContextSet( GLBlendEnableSRGB_t *src )\n{\n'
+       '#if defined(SOURCE_IOS)\n\t(void)src; return; // shader-managed sRGB output\n#endif\n')
+# Software-encoded render targets must keep linear storage even when decode
+# switching becomes available; otherwise automatic sRGB writes encode twice.
+change('togles/linuxwin/cglmtex.cpp',
+       '\tif ( gGL->m_bHave_GL_EXT_texture_sRGB_decode )\n\t{',
+       '\tif ( gGL->m_bHave_GL_EXT_texture_sRGB_decode\n'
+       '#if defined(SOURCE_IOS)\n\t\t&& !(key->m_texFlags & kGLMTexRenderable)\n#endif\n\t)\n\t{')
+
+# Updating the requested state alone is insufficient: GLSL uniforms start at 0.
+change('togles/linuxwin/glmgr_flush.inl', '\tm_pBoundPair->UpdateScreenUniform( m_ViewportBox.GetData().widthheight );',
+       '#if defined(SOURCE_IOS)\n'
+       '\tif ( !m_caps.m_hasGammaWrites && m_pBoundPair->m_locFragmentFakeSRGBEnable >= 0 )\n'
+       '\t{\n'
+       '\t\tconst float enabled = m_FakeBlendEnableSRGB ? 1.0f : 0.0f;\n'
+       '\t\tif ( m_pBoundPair->m_fakeSRGBEnableValue != enabled )\n'
+       '\t\t{\n'
+       '\t\t\tgGL->glUniform1f(m_pBoundPair->m_locFragmentFakeSRGBEnable, enabled);\n'
+       '\t\t\tm_pBoundPair->m_fakeSRGBEnableValue = enabled;\n'
+       '\t\t\tstatic bool reported = false;\n'
+       '\t\t\tif ( enabled > 0.5f && !reported ) { Msg("GMP sRGB output: software write uniform active, linear RT policy\\n"); reported = true; }\n'
+       '\t\t}\n'
+       '\t}\n#endif\n'
+       '\tm_pBoundPair->UpdateScreenUniform( m_ViewportBox.GetData().widthheight );')
+# Depth-only shaders have no color output. Never generate a zero-length output
+# array or an sRGB operation referencing a nonexistent gl_FragData[0].
+change('togles/linuxwin/dx9asmtogl2.cpp', '\t// Control bit for sRGB Write suffix\n',
+       '#if defined(SOURCE_IOS)\n'
+       '\tif ( m_iFragDataCount == 0 ) m_bGenerateSRGBWriteSuffix = false;\n'
+       '#endif\n\t// Control bit for sRGB Write suffix\n')
+
+# The fallback encodes only draws that request sRGB. No log(negative), no
+# conversion on linear HDR intermediates, and no change to alpha.
+change('togles/linuxwin/dx9asmtogl2.cpp',
+       '\t\tStrcatToALUCode( "vec3 sRGBFragData;\\n" );\n'
+       '\t\tStrcatToALUCode( "sRGBFragData.xyz = log( gl_FragData[0].xyz );\\n" );\n'
+       '\t\tStrcatToALUCode( "sRGBFragData.xyz = sRGBFragData.xyz * vec3( 0.454545f, 0.454545f, 0.454545f );\\n" );\n'
+       '\t\tStrcatToALUCode( "sRGBFragData.xyz = exp( sRGBFragData.xyz );\\n" );\n'
+       '\t\tStrcatToALUCode( "gl_FragData[0].xyz = mix( gl_FragData[0].xyz, sRGBFragData, flSRGBWrite );\\n" );',
+       '#if defined(SOURCE_IOS)\n'
+       '\t\tStrcatToALUCode("if (flSRGBWrite > 0.5) {\\n");\n'
+       '\t\tStrcatToALUCode("vec3 linearRGB = max(gl_FragData[0].rgb, vec3(0.0));\\n");\n'
+       '\t\tStrcatToALUCode("vec3 lowRGB = linearRGB * 12.92;\\n");\n'
+       '\t\tStrcatToALUCode("vec3 highRGB = 1.055 * pow(linearRGB, vec3(1.0 / 2.4)) - 0.055;\\n");\n'
+       '\t\tStrcatToALUCode("gl_FragData[0].rgb = mix(highRGB, lowRGB, lessThanEqual(linearRGB, vec3(0.0031308)));\\n");\n'
+       '\t\tStrcatToALUCode("}\\n");\n'
+       '#else\n'
+       '\t\tStrcatToALUCode( "vec3 sRGBFragData;\\n" );\n'
+       '\t\tStrcatToALUCode( "sRGBFragData.xyz = log( gl_FragData[0].xyz );\\n" );\n'
+       '\t\tStrcatToALUCode( "sRGBFragData.xyz = sRGBFragData.xyz * vec3( 0.454545f, 0.454545f, 0.454545f );\\n" );\n'
+       '\t\tStrcatToALUCode( "sRGBFragData.xyz = exp( sRGBFragData.xyz );\\n" );\n'
+       '\t\tStrcatToALUCode( "gl_FragData[0].xyz = mix( gl_FragData[0].xyz, sRGBFragData, flSRGBWrite );\\n" );\n'
+       '#endif')
+
+# Observe the real sampler path; do not infer sRGB support from an extension warning.
+change('togles/linuxwin/glmgr.cpp',
+       '\tGLMDebugPrintf( "GL sampler object usage: %s\\n", m_bUseSamplerObjects ? "ENABLED" : "DISABLED" );',
+       '\tGLMDebugPrintf( "GL sampler object usage: %s\\n", m_bUseSamplerObjects ? "ENABLED" : "DISABLED" );\n'
+       '#if defined(SOURCE_IOS)\n'
+       '\tMsg( "GMP sRGB: decode_ext=%d sampler_objects=%d texture_backing=%d read_state_fallback=texture_reupload\\n",\n'
+       '\t\tgGL->m_bHave_GL_EXT_texture_sRGB_decode, m_bUseSamplerObjects, m_bTexClientStorage );\n'
+       '#endif')
+# Record actual gamma-ramp application, including SDL's reason for a failure.
+change('appframework/sdlmgr.cpp',
+       '\t\tint nResult = SDL_SetWindowGammaRamp( m_Window, pRed, pGreen, pBlue );',
+       '#if defined(SOURCE_IOS) && defined(GMP_USE_ANGLE)\n'
+       '\t\textern int GMPAngleGammaRamp(const uint16 *, const uint16 *, const uint16 *);\n'
+       '\t\tint nResult = GMPAngleGammaRamp( pRed, pGreen, pBlue );\n'
+       '#else\n'
+       '\t\tint nResult = SDL_SetWindowGammaRamp( m_Window, pRed, pGreen, pBlue );\n'
+       '#endif\n'
+       '#if defined(SOURCE_IOS)\n'
+       '\t\tConMsg( "GMP gamma: ramp submission result=%d error=%s requested_mid_rgb=%u,%u,%u\\n",\n'
+       '\t\t\tnResult, nResult ? SDL_GetError() : "none", unsigned(pRed[128]), unsigned(pGreen[128]), unsigned(pBlue[128]) );\n'
+       '#endif')
+
+# Keep only the platform-independent texture reupload fallback on iOS. Do not
+# restore desktop CGL/Apple client-storage APIs along with it.
+for path, context, expected in [
+    ('public/togles/linuxwin/cglmtex.h', r'\tvoid\s+HandleSRGBMismatch', 1),
+    ('togles/linuxwin/cglmtex.cpp', r'\nvoid CGLMTex::HandleSRGBMismatch', 1),
+    ('togles/linuxwin/glmgr_flush.inl', r'\t+(?:CGLMTex \*pTex = m_samplers|if\( pTex && !\( gGL->m_bHave_GL_EXT_texture_sRGB_decode)', 2),
+]:
+    file=root/path
+    text=file.read_text(encoding='utf-8')
+    text, count=re.subn(r'^#if[^\n]*\bOSX\b[^\n]*\n(?='+context+r')',
+        '#if defined(OSX) || defined(SOURCE_IOS) // GModPort sRGB texture fallback\n', text, flags=re.M)
+    if count != expected: raise SystemExit('Unexpected sRGB fallback guard: '+path)
+    if text != file.read_text(encoding='utf-8'):
+        file.write_text(text,encoding='utf-8',newline='\n');changes.append(path)
+
+# Avoid the legacy Mac debug/stack-crawl code and require retained texels before
+# changing a texture's storage format. Render targets are never reallocated here.
+change('togles/linuxwin/cglmtex.cpp',
+       'void CGLMTex::HandleSRGBMismatch( bool srgb, int &srgbFlipCount )\n{',
+       'void CGLMTex::HandleSRGBMismatch( bool srgb, int &srgbFlipCount )\n{\n'
+       '#if defined(SOURCE_IOS)\n'
+       '\tif ( !m_layout->m_format->m_glIntFormatSRGB || (m_layout->m_key.m_texFlags & kGLMTexRenderable) ) return;\n'
+       '\tif ( !m_backing )\n'
+       '\t{\n'
+       '\t\tstatic bool warned = false;\n'
+       '\t\tif ( !warned ) { Warning("GMP sRGB: cannot reupload texture without retained texels\\n"); warned = true; }\n'
+       '\t\treturn;\n'
+       '\t}\n'
+       '\tif ( ((m_layout->m_key.m_texFlags & kGLMTexSRGB) != 0) != srgb )\n'
+       '\t{ ++srgbFlipCount; ResetSRGB(srgb, false); }\n'
+       '#else\n')
+change('togles/linuxwin/cglmtex.cpp', '}\n\n\nvoid CGLMTex::ResetSRGB',
+       '#endif // SOURCE_IOS\n}\n\n\nvoid CGLMTex::ResetSRGB')
+
 # OSX is retained for Darwin's low-level platform implementation. Within ToGLES,
 # however, it selects desktop CGL, NSOpenGL and obsolete Mac GL workarounds.
 # iOS uses the renderer's existing SDL/GLES paths instead. Keep the broader
@@ -484,6 +666,65 @@ change(path, '\t\t\theight = scheme()->GetProportionalScaledValue( height );\n',
        '\t\theight = MAX( height, screenTall / 14 );\n')
 change(path, '\tif( !bFoundServerBrowser && !ModInfo().IsSinglePlayerOnly() )',
        '\tif( false && !bFoundServerBrowser && !ModInfo().IsSinglePlayerOnly() )')
+# Native Lua lifecycle; unsupported original bindings fail with a concrete Lua error.
+change('game/shared/hl2mp/weapon_physcannon.cpp', '#include "gmp_physgun.inl"',
+       '#include "gmp_physgun.inl"\n#include "gmp_lua_bridge.inl"')
+change('gameui/BasePanel.cpp', '#include "tier0/memdbgon.h"',
+       '#include "gmp_lua_menu.inl"\n#include "tier0/memdbgon.h"')
+change('game/shared/hl2mp/weapon_physcannon.cpp', '#include "tier0/memdbgon.h"',
+       '#include "../gmod/glua_runtime.h"\n#include <memory>\n#include "igamesystem.h"\n#include "tier1/utlbuffer.h"\n#include "tier0/memdbgon.h"')
+change('gameui/BasePanel.cpp', 'void CBasePanel::RunFrame()\n{',
+       'void CBasePanel::RunFrame()\n{\n\tbool gmpMenuDialog = ( m_hOptionsDialog.Get() && m_hOptionsDialog->IsVisible() ) || GameConsole().IsConsoleVisible();\n\ts_GMPMenuLua.Tick( IsVisible() && !gmpMenuDialog );')
+
+# CGameMenu::SetVisible(false) normally only moves the still-visible popup
+# behind its siblings. HTML needs the popup genuinely hidden, including calls
+# from UpdateGameMenus() between RunFrame and rendering.
+change('gameui/BasePanel.cpp', '\tvirtual void SetVisible(bool state)\n\t{\n\t\tif ( m_hMainMenuOverridePanel )',
+       '\tvirtual void SetVisible(bool state)\n\t{\n'
+       '\t\tif ( s_GMPMenuLua.DocumentReady() )\n'
+       '\t\t{\n'
+       '\t\t\tBaseClass::SetVisible(false);\n'
+       '\t\t\tSetMouseInputEnabled(false);\n'
+       '\t\t\tSetKeyBoardInputEnabled(false);\n'
+       '\t\t\treturn;\n'
+       '\t\t}\n'
+       '\t\tSetMouseInputEnabled(true);\n'
+       '\t\tSetKeyBoardInputEnabled(true);\n'
+       '\t\tif ( m_hMainMenuOverridePanel )')
+# Avoid painting a second native background/dimmer under the HTML renderer.
+# Loading, native Options and console still keep their own background.
+change('gameui/BasePanel.cpp', 'void CBasePanel::PaintBackground()\n{',
+       'void CBasePanel::PaintBackground()\n{\n'
+       '\tif ( s_GMPMenuLua.DocumentReady() && s_GMPMenuLua.Visible() && !g_hLoadingDialog.Get() && !m_ExitingFrameCount )\n'
+       '\t\treturn;\n')
+
+change('gameui/BasePanel.cpp', '\t// Check to see if a pending async task has already finished',
+       '\t// Original HTML owns main-menu input and appearance after its controller is ready.\n'
+       '\tstatic bool gmpWasOriginalMenu = false;\n'
+       '\tbool gmpOriginalMenu = s_GMPMenuLua.DocumentReady();\n'
+       '\tif ( gmpOriginalMenu || gmpWasOriginalMenu )\n'
+       '\t{\n'
+       '\t\tm_pGameMenu->SetVisible( !gmpOriginalMenu );\n'
+       '\t\tif ( m_pGameLogo ) m_pGameLogo->SetVisible( !gmpOriginalMenu );\n'
+       '\t\tfor ( int i = 0; i < m_pGameMenuButtons.Count(); ++i ) m_pGameMenuButtons[i]->SetVisible( !gmpOriginalMenu );\n'
+       '\t}\n'
+       '\tgmpWasOriginalMenu = gmpOriginalMenu;\n'
+       '\t// Check to see if a pending async task has already finished')
+
+change('gameui/GameUI_Interface.cpp', 'void CGameUI::Shutdown()\n{',
+       'extern void GMP_ShutdownMenuLua();\nvoid CGameUI::Shutdown()\n{\n\tGMP_ShutdownMenuLua();')
+
+change('gameui/GameUI_Interface.cpp', 'void CGameUI::ActivateGameUI()\n{',
+       'extern void GMP_SetMenuActive(bool active);\nvoid CGameUI::ActivateGameUI()\n{\n\tGMP_SetMenuActive(true);')
+change('gameui/GameUI_Interface.cpp', 'void CGameUI::HideGameUI()\n{',
+       'void CGameUI::HideGameUI()\n{\n\tGMP_SetMenuActive(false);')
+change('gameui/GameUI_Interface.cpp', 'void CGameUI::OnLevelLoadingStarted( bool bShowProgressDialog )\n{',
+       'void CGameUI::OnLevelLoadingStarted( bool bShowProgressDialog )\n{\n\tGMP_SetMenuActive(false);')
+change('gameui/GameUI_Interface.cpp', 'void CGameUI::OnGameUIActivated()\n{',
+       'void CGameUI::OnGameUIActivated()\n{\n\tGMP_SetMenuActive(true);')
+change('gameui/GameUI_Interface.cpp', 'void CGameUI::OnGameUIHidden()\n{',
+       'void CGameUI::OnGameUIHidden()\n{\n\tGMP_SetMenuActive(false);')
+
 # The open spawn menu (gmp_physgun.inl) takes the touches; without this, scrolling it turns the camera.
 path='game/client/cdll_client_int.cpp'
 change(path, 'void CHLClient::IN_TouchEvent( int type, int fingerId, int x, int y )\n'

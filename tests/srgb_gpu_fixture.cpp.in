@@ -1,0 +1,78 @@
+#include <GLES3/gl3.h>
+#include <EGL/egl.h>
+#include <cassert>
+#include <cstring>
+#include <cstdio>
+#define Assert(x) assert(x)
+#define SOURCE_IOS 1
+#define GLMDEBUG 0
+#define GLMPRINTF(x) (void)0
+#define Warning(...) std::fprintf(stderr,__VA_ARGS__)
+constexpr int kGLMTexSRGB=1,kGLMTexRenderable=2;
+struct CGLMTex;
+struct Region{int xmin,ymin,zmin,xmax,ymax,zmax;};
+struct GLMTexLockDesc {
+ struct {CGLMTex* m_tex;int m_face,m_mip;Region m_region;} m_req;
+ int m_sliceIndex,m_sliceBaseOffset,m_sliceRegionOffset;
+};
+struct GLMTexLayoutKey{int m_texFlags=0;GLenum m_texGLTarget=GL_TEXTURE_2D;};
+struct Format{int m_glIntFormatSRGB=GL_SRGB8_ALPHA8;} format;
+struct Slice{int m_xSize=1,m_ySize=1,m_zSize=1,m_storageOffset=0;};
+using GLMTexLayoutSlice=Slice;
+struct GLMTexLayout {
+ GLMTexLayoutKey m_key;Format* m_format=&format;int m_storageTotalSize=4,m_faceCount=1,m_mipCount=1;
+ Slice m_slices[1];
+};
+struct Table {
+ GLMTexLayout* NewLayoutRef(GLMTexLayoutKey* key){auto p=new GLMTexLayout;p->m_key=*key;return p;}
+ void DelLayoutRef(GLMTexLayout* layout){delete layout;}
+} table;
+struct Context {
+ Table* m_texLayoutTable=&table;
+ struct {CGLMTex* m_pBoundTex=nullptr;} m_samplers[1];
+ void BindTexToTMU(CGLMTex*,int);
+} ctx;
+struct CGLMTex {
+ GLMTexLayout* m_layout=new GLMTexLayout;
+ GLenum m_texGLTarget=GL_TEXTURE_2D;GLuint name=0;
+ unsigned char texels[4]={128,128,128,255};void* m_backing=texels;
+ Context* m_ctx=&ctx;int uploads=0,m_srgbFlipCount=0;
+ void HandleSRGBMismatch(bool,int&);void ResetSRGB(bool,bool);
+ int CalcSliceIndex(int,int){return 0;}
+ void WriteTexels(GLMTexLockDesc*,bool whole,bool noData){assert(whole&&!noData);++uploads;
+  glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,name);
+  glTexImage2D(GL_TEXTURE_2D,0,(m_layout->m_key.m_texFlags&kGLMTexSRGB)?GL_SRGB8_ALPHA8:GL_RGBA8,1,1,0,GL_RGBA,GL_UNSIGNED_BYTE,texels);
+ }
+};
+void Context::BindTexToTMU(CGLMTex* tex,int unit){glActiveTexture(GL_TEXTURE0+unit);glBindTexture(GL_TEXTURE_2D,tex?tex->name:0);}
+// These are the production methods extracted after patch_engine.py.
+@METHODS@
+GLuint Shader(GLenum type,const char* code){GLuint s=glCreateShader(type);glShaderSource(s,1,&code,nullptr);glCompileShader(s);GLint okay;glGetShaderiv(s,GL_COMPILE_STATUS,&okay);assert(okay);return s;}
+int Sample(CGLMTex& tex,GLuint program){
+ glUseProgram(program);glBindFramebuffer(GL_FRAMEBUFFER,0);glViewport(0,0,1,1);
+ glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,tex.name);glDrawArrays(GL_TRIANGLES,0,3);
+ unsigned char pixel[4];glReadPixels(0,0,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel);assert(glGetError()==GL_NO_ERROR);return pixel[0];
+}
+int main(){
+ EGLDisplay d=eglGetPlatformDisplay(0x31DD,EGL_DEFAULT_DISPLAY,nullptr);assert(d!=EGL_NO_DISPLAY&&eglInitialize(d,nullptr,nullptr));assert(eglBindAPI(EGL_OPENGL_ES_API));
+ EGLint attrs[]={EGL_SURFACE_TYPE,EGL_PBUFFER_BIT,EGL_RENDERABLE_TYPE,EGL_OPENGL_ES3_BIT,EGL_RED_SIZE,8,EGL_GREEN_SIZE,8,EGL_BLUE_SIZE,8,EGL_ALPHA_SIZE,8,EGL_NONE};
+ EGLConfig cfg;EGLint n;assert(eglChooseConfig(d,attrs,&cfg,1,&n)&&n==1);EGLint size[]={EGL_WIDTH,1,EGL_HEIGHT,1,EGL_NONE}, ca[]={EGL_CONTEXT_CLIENT_VERSION,3,EGL_NONE};
+ EGLSurface surface=eglCreatePbufferSurface(d,cfg,size);EGLContext context=eglCreateContext(d,cfg,EGL_NO_CONTEXT,ca);assert(eglMakeCurrent(d,surface,surface,context));
+ const char* vs="#version 300 es\nvoid main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));gl_Position=vec4(p*2.-1.,0,1);}";
+ const char* fs="#version 300 es\nprecision highp float;uniform sampler2D image;out vec4 color;void main(){color=texture(image,vec2(0.5));}";
+ GLuint v=Shader(GL_VERTEX_SHADER,vs),f=Shader(GL_FRAGMENT_SHADER,fs),program=glCreateProgram();glAttachShader(program,v);glAttachShader(program,f);glLinkProgram(program);
+ GLint okay;glGetProgramiv(program,GL_LINK_STATUS,&okay);assert(okay);glUseProgram(program);glUniform1i(glGetUniformLocation(program,"image"),0);
+ GLuint vao;glGenVertexArrays(1,&vao);glBindVertexArray(vao);
+ CGLMTex tex;glGenTextures(1,&tex.name);glBindTexture(GL_TEXTURE_2D,tex.name);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+ GLMTexLockDesc dummy;tex.WriteTexels(&dummy,true,false);assert(Sample(tex,program)==128);
+ tex.HandleSRGBMismatch(true,tex.m_srgbFlipCount);int decoded=Sample(tex,program);assert(decoded>=54&&decoded<=56);assert(tex.uploads==2&&tex.m_srgbFlipCount==1);
+ tex.HandleSRGBMismatch(true,tex.m_srgbFlipCount);assert(tex.uploads==2&&tex.m_srgbFlipCount==1);
+ tex.HandleSRGBMismatch(false,tex.m_srgbFlipCount);assert(Sample(tex,program)==128);assert(tex.uploads==3&&tex.m_srgbFlipCount==2);
+ // Preserve render-target contents and refuse to reupload absent CPU texels.
+ tex.m_layout->m_key.m_texFlags|=kGLMTexRenderable;tex.HandleSRGBMismatch(true,tex.m_srgbFlipCount);assert(tex.uploads==3);
+ tex.m_layout->m_key.m_texFlags=0;tex.m_backing=nullptr;tex.HandleSRGBMismatch(true,tex.m_srgbFlipCount);assert(tex.uploads==3);
+ assert(glGetError()==GL_NO_ERROR);
+ std::printf("Production sRGB fallback + real GLES: stored 128 -> decoded %d -> raw 128; no redundant upload; RT/missing backing protected\n",decoded);
+ delete tex.m_layout;glDeleteTextures(1,&tex.name);glDeleteProgram(program);glDeleteShader(v);glDeleteShader(f);glDeleteVertexArrays(1,&vao);
+ eglMakeCurrent(d,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);eglDestroyContext(d,context);eglDestroySurface(d,surface);eglTerminate(d);
+}

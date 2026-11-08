@@ -18,6 +18,12 @@
 - Код Aero в game/client/gmod, game/server/gmod и game/shared/gmod включается в
   source lists при наличии, но не изменяется средствами этого проекта.
 
+Работа над native GLua и HTML описана в [docs/NATIVE_GLUA_HTML.md](docs/NATIVE_GLUA_HTML.md).
+Главное меню подключено через неизменённые `mainmenu.lua`, `getmaps.lua` и HTML Facepunch.
+Проверяются callbacks, локализация и команды выбора карты; запуск на iPhone ещё требует
+проверки. Нативное [Q-меню](docs/QMENU.md) расширено поиском и параметрами инструментов;
+оригинальный Lua/Derma контроллер Q-меню, полный GLua и Steam/Workshop API ещё не подключены.
+
 ## Сборка G1
 
 Workflow `G1 Source iOS`: macos-14, ручной запуск или push main. Сначала host-test

@@ -320,12 +320,24 @@ int main(int, char**) {
             // GMod-style main menu (GameUI): entries and the logo panel (materials/gmp/logo in the port pack).
             @[resource(@"GameMenu.res"), [ui stringByAppendingPathComponent:@"GameMenu.res"]],
             @[resource(@"GameLogo.res"), [ui stringByAppendingPathComponent:@"GameLogo.res"]]]];
+        [copies addObject:@[resource(@"original_tool/cl_viewscreen.lua"), [game stringByAppendingPathComponent:@"gamemodes/sandbox/entities/weapons/gmod_tool/cl_viewscreen.lua"]]];
+        [copies addObject:@[resource(@"original_tool/tool.properties"), [game stringByAppendingPathComponent:@"resource/localization/en/tool.properties"]]];
+        [copies addObject:@[resource(@"original_local/workshop_files.lua"), [game stringByAppendingPathComponent:@"lua/includes/util/workshop_files.lua"]]];
+        for (NSString* name in @[@"menu_dupe.lua", @"menu_demo.lua", @"menu_save.lua"])
+            [copies addObject:@[resource([@"original_local/" stringByAppendingString:name]), [[game stringByAppendingPathComponent:@"lua/menu"] stringByAppendingPathComponent:name]]];
+        NSString* portLua = [game stringByAppendingPathComponent:@"lua/port"];
+        [fm createDirectoryAtPath:portLua withIntermediateDirectories:YES attributes:nil error:nil];
+        NSString* portLuaSource = resource(@"portlua");
+        for (NSString* name in [fm contentsOfDirectoryAtPath:portLuaSource error:nil])
+            if ([name.pathExtension isEqualToString:@"lua"])
+                [copies addObject:@[[portLuaSource stringByAppendingPathComponent:name], [portLua stringByAppendingPathComponent:name]]];
         NSString* touchSource = resource(@"touch");
         for (NSString* name in [fm contentsOfDirectoryAtPath:touchSource error:nil])
             if ([name.pathExtension isEqualToString:@"vtf"])
                 [copies addObject:@[[touchSource stringByAppendingPathComponent:name], [touchDir stringByAppendingPathComponent:name]]];
         if (copies.count == 11) SDL_Log("No touch textures in bundle at %s", touchSource.UTF8String);
         for (NSArray<NSString*>* copy in copies) {
+            [fm createDirectoryAtPath:[copy[1] stringByDeletingLastPathComponent] withIntermediateDirectories:YES attributes:nil error:nil];
             [fm removeItemAtPath:copy[1] error:nil];
             if (![fm copyItemAtPath:copy[0] toPath:copy[1] error:nil])
                 SDL_Log("Cannot install %s", copy[1].UTF8String);

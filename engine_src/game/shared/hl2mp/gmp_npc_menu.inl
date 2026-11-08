@@ -17,6 +17,7 @@ static void GMP_LoadNPCMenu()
         }
         GMPSpawnItem item;
         item.model=def.iconModel;
+        item.icon=CFmtStr("entities/%s.png",def.id).Access();
         item.text=def.label;
         char command[128];
         Q_snprintf(command,sizeof(command),"gmp_npc %s",def.id);

@@ -14,6 +14,12 @@
 <key>MinimumOSVersion</key><string>15.0</string>
 <key>UIDeviceFamily</key><array><integer>1</integer><integer>2</integer></array>
 <key>NSMicrophoneUsageDescription</key><string>Voice chat uses the microphone when you enable recording in the game.</string>
+<key>CFBundleIcons</key><dict><key>CFBundlePrimaryIcon</key><dict>
+<key>CFBundleIconFiles</key><array><string>AppIcon60</string></array>
+<key>UIPrerenderedIcon</key><false/></dict></dict>
+<key>CFBundleIcons~ipad</key><dict><key>CFBundlePrimaryIcon</key><dict>
+<key>CFBundleIconFiles</key><array><string>AppIcon60</string><string>AppIcon76</string><string>AppIcon83.5</string></array>
+<key>UIPrerenderedIcon</key><false/></dict></dict>
 <key>UIRequiresFullScreen</key><true/>
 <key>UIFileSharingEnabled</key><true/>
 <key>LSSupportsOpeningDocumentsInPlace</key><true/>

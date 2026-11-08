@@ -2,7 +2,7 @@ name: G1 Source iOS
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, native-glua-html]
     paths:
       - 'app/**'
       - 'engine_src/**'
@@ -17,7 +17,7 @@ permissions:
   contents: read
 concurrency:
   group: gmod-g1-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
   engine-ios:
     runs-on: macos-15
@@ -47,6 +47,13 @@ jobs:
           ctest --test-dir build-host --output-on-failure
       - name: Fetch pinned dependencies
         run: python3 tools/bootstrap.py
+      - name: Build the native GLua interpreter for iPhone
+        run: bash gluavm/build_ios.sh
+      - name: Type-check the native HTML bridge with iPhone SDK
+        run: |
+          xcrun --sdk iphoneos clang++ -std=c++17 -fobjc-arc -fsyntax-only \
+            -target arm64-apple-ios15.0 -isysroot "$(xcrun --sdk iphoneos --show-sdk-path)" \
+            platform/html/html_panel.mm
       - name: Test Source interface registrations and loader
         run: |
           cmake -S . -B build-host -DGMOD_BUILD_ENGINE=OFF -DSOURCE_ENGINE_HEADERS="$PWD/deps/engine" -DCMAKE_BUILD_TYPE=Debug
@@ -92,7 +99,7 @@ jobs:
           xcrun --sdk iphoneos clang++ -std=c++17 -fsyntax-only -target arm64-apple-ios15.0 \
             -isysroot "$(xcrun --sdk iphoneos --show-sdk-path)" \
             -I build-deps/install/include/SDL2 -I build-deps/angle/include \
-            -DANGLE_STATIC=1 -DEGLAPI= -DGL_APICALL= platform/angle/angle_metal.cpp
+            -DANGLE_STATIC=1 -DEGLAPI= -DGL_APICALL= platform/angle/angle_metal.cpp platform/angle/gamma_pass.cpp
       - name: Apply iOS platform patch
         run: python3 tools/patch_engine.py deps/engine
       - name: Configure static Source engine

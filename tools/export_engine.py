@@ -102,6 +102,15 @@ def main():
             for target in context.projects:
                 target['folder']=folder
                 # Only add Aero's integration code; never edit it.
+                if folder in ('game/client','game/server','gameui'):
+                    target.setdefault('use',[]).append('GLUAVM')
+                if folder=='game/client':
+                    # Q-menu text entries call SDL_StartTextInput / SDL_StopTextInput.
+                    # Propagate the imported SDL target's headers to the real client build.
+                    target.setdefault('use',[]).append('SDL2')
+                if folder=='gameui':
+                    target['source'] += [str(engine/'game/shared/gmod'/p) for p in ['glua_api.cpp','glua_runtime.cpp']]
+                    target['includes'].append(str(Path(__file__).resolve().parents[1]/'platform/html'))
                 if folder in ('game/client','game/server'):
                     extra=list((engine/folder/'gmod').rglob('*.cpp'))+list((engine/'game/shared/gmod').rglob('*.cpp'))
                     target['source'] += [str(p) for p in extra]

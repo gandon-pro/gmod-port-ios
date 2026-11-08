@@ -3,6 +3,7 @@ from pathlib import Path
 import plistlib
 import subprocess
 import zipfile
+from check_app_icons import validate_icons
 
 parser=argparse.ArgumentParser()
 parser.add_argument('--app',required=True,type=Path)
@@ -10,6 +11,7 @@ parser.add_argument('--output',required=True,type=Path)
 args=parser.parse_args()
 app=args.app.resolve()
 info=plistlib.loads((app/'Info.plist').read_bytes())
+validate_icons(app,info)
 binary=app/info['CFBundleExecutable']
 subprocess.run(['xcrun','lipo','-info',str(binary)],check=True)
 subprocess.run(['xcrun','lipo',str(binary),'-verify_arch','arm64'],check=True)

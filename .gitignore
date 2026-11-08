@@ -9,3 +9,5 @@ __pycache__/
 *.lib
 *.exe
 *.log
+
+/tests/menu/node_modules/
