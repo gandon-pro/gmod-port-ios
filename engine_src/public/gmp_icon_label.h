@@ -1,5 +1,15 @@
 #pragma once
 #include <cstddef>
+// Pinned derma/init.lua: DejaVu Sans 14 on POSIX. ContentIcon is 128px,
+// so captions must not scale with the fullscreen HUD/list font.
+constexpr int GMP_CONTENT_CAPTION_FONT_TALL=14;
+struct GMPIconCaptionRect {int x,y,w,h;};
+inline GMPIconCaptionRect GMP_IconCaptionRect(int width,int height,int fontTall){
+    const int margin=width<20?width/2:10;
+    const int room=height>9?height-9:0;
+    const int tall=fontTall<room?fontTall:room;
+    return {margin,room-tall,width-2*margin,tall};
+}
 // Trim by glyph advance, keeping every caption within its own card.
 template<class Width>void GMP_FitIconLabel(wchar_t *text,std::size_t capacity,int maxWidth,Width width)
 {

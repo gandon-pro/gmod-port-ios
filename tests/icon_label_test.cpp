@@ -9,6 +9,9 @@ int main(){
  GMP_FitIconLabel(title,128,64,width);int size=0;for(wchar_t c:std::wstring(title))size+=width(c);assert(size<=64);assert(std::wstring(title).substr(wcslen(title)-3)==L"...");
  wchar_t small[3]=L"WW";GMP_FitIconLabel(small,3,2,width);assert(!small[0]);
  wchar_t fits[20]=L"Tool Gun";GMP_FitIconLabel(fits,20,100,width);assert(std::wstring(fits)==L"Tool Gun");
+ auto rect=GMP_IconCaptionRect(128,128,GMP_CONTENT_CAPTION_FONT_TALL);
+ assert(rect.x==10&&rect.y==105&&rect.w==108&&rect.h==14);
+ auto tiny=GMP_IconCaptionRect(8,8,14);assert(tiny.w>=0&&tiny.y>=0&&tiny.h==0);
  assert(gmp::LocalFile("dupes/my build.dupe","dupes",".dupe"));
  for(const char *bad:{"dupes/../cfg/config.cfg","dupes/sub/build.dupe","dupes/a.dupe;quit","dupes/a.dupe\n","/dupes/a.dupe","dupes/a.dupe.bak","dupes/.dupe","dupes/..x.dupe","dupes/a\\b.dupe"})assert(!gmp::LocalFile(bad,"dupes",".dupe"));
  assert(!gmp::LocalFile(std::string("dupes/a.dupe\0b",14),"dupes",".dupe"));

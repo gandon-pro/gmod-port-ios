@@ -1,0 +1,65 @@
+#include "gmp_icon_label.h"
+#include <cassert>
+#include <cstring>
+#include <cwchar>
+#include <string>
+#include <vector>
+#include <cstdio>
+#define DECLARE_CLASS_SIMPLE(name,base) using BaseClass=base
+#define ARRAYSIZE(a) (sizeof(a)/sizeof((a)[0]))
+struct Color {int r,g,b,a;Color(int R,int G,int B,int A):r(R),g(G),b(B),a(A){}};
+namespace vgui {
+using HFont=unsigned int;
+struct Surface {
+ int originX=0,originY=0;std::vector<int> destroyed;int textX=-1,textY=-1,paintCount=0;
+ int GetFontTall(HFont f){return int(f);}int GetCharacterWidth(HFont,wchar_t c){return c==L'W'?14:7;}
+ void DestroyTextureID(int id){destroyed.push_back(id);}void DrawSetColor(int,int,int,int){}void DrawSetTexture(int){}
+ void DrawTexturedRect(int,int,int,int){}void DrawTexturedSubRect(int,int,int,int,float,float,float,float){}
+} surfaceFixture;
+Surface *surface(){return &surfaceFixture;}
+struct Input {void GetCursorPos(int &x,int &y){x=y=-10000;}} inputFixture;
+Input *input(){return &inputFixture;}
+class Panel {
+public:
+ Panel(Panel *p,const char*):parent(p){if(p)p->children.push_back(this);}virtual ~Panel(){for(auto *c:children)delete c;}
+ virtual void Paint(){}virtual void PerformLayout(){}
+ void SetMouseInputEnabled(bool){}void SetKeyBoardInputEnabled(bool){}void SetPaintBackgroundEnabled(bool){}void SetPaintBorderEnabled(bool){}
+ void SetBounds(int X,int Y,int W,int H){x=X;y=Y;w=W;h=H;}int GetWide()const{return w;}int GetTall()const{return h;}
+ int AbsX()const{return x+(parent?parent->AbsX():0);}int AbsY()const{return y+(parent?parent->AbsY():0);}
+ void ScreenToLocal(int &X,int &Y){X-=AbsX();Y-=AbsY();}void SetVisible(bool b){visible=b;}
+ void Render(){if(!visible)return;int ox=surface()->originX,oy=surface()->originY;surface()->originX=AbsX();surface()->originY=AbsY();Paint();for(auto *c:children)c->Render();surface()->originX=ox;surface()->originY=oy;}
+ Panel *parent;std::vector<Panel *> children;int x=0,y=0,w=128,h=128;bool visible=true;
+};
+class Label:public Panel {
+public:
+ enum Alignment {a_center};
+ Label(Panel *p,const char *n,const char*):Panel(p,n){}
+ void SetProportional(bool b){proportional=b;}void SetContentAlignment(Alignment){}void SetTextInset(int,int){}
+ void SetFont(HFont f){font=f;}void SetFgColor(Color c){color=c;}void SetText(const wchar_t *s){text=s;}
+ void Paint()override{int tw=0;for(auto c:text)tw+=surface()->GetCharacterWidth(font,c);surface()->textX=surface()->originX+(w-tw)/2;surface()->textY=surface()->originY;++surface()->paintCount;}
+ bool proportional=true;HFont font=0;Color color{0,0,0,255};std::wstring text;
+};
+}
+struct Localize {void ConvertANSIToUnicode(const char *s,wchar_t *out,int bytes){int cap=bytes/int(sizeof(wchar_t));int i=0;for(;s[i]&&i<cap-1;++i)out[i]=s[i];out[i]=0;}} localize,*g_pVGuiLocalize=&localize;
+class CMDLPanel:public vgui::Panel {
+public:
+ CMDLPanel(vgui::Panel *p,const char *n):Panel(p,n){}
+ void Paint()override{vgui::surface()->originX=5000;vgui::surface()->originY=6000;} // Simulate a 3D painter touching state.
+};
+int GMP_LoadPNGTexture(const char*){return 42;}
+@PANEL_CLASS@;
+int main(){
+ vgui::Panel root(nullptr,"grid");root.SetBounds(100,200,500,500);
+ auto *icon=new CGMPSpawnIconPanel(&root);icon->SetBounds(4,28,128,128);icon->ConfigureCaption(GMP_CONTENT_CAPTION_FONT_TALL,"Tool Gun",false,10,11,12);
+ assert(icon->children.size()==1);auto *caption=static_cast<vgui::Label *>(icon->children[0]);
+ assert(!caption->proportional&&caption->x==10&&caption->y==105&&caption->w==108&&caption->h==14&&caption->visible);
+ root.Render();assert(vgui::surface()->paintCount==1);assert(vgui::surface()->textX==100+4+10+(108-56)/2&&vgui::surface()->textY==200+28+105);
+ const int x=vgui::surface()->textX,y=vgui::surface()->textY;
+ icon->SetBounds(4,-12,128,128);icon->PerformLayout();root.Render();assert(vgui::surface()->textX==x&&vgui::surface()->textY==y-40);
+ root.SetBounds(700,500,1200,900);root.Render();assert(caption->x==10&&caption->y==105&&caption->h==14);assert(vgui::surface()->textX==x+600&&vgui::surface()->textY==y-40+300);
+ icon->ConfigureCaption(14,"WWWWWWWWWWWWWWWWWWWW",false,10,11,12);int tw=0;for(auto c:caption->text)tw+=vgui::surface()->GetCharacterWidth(14,c);assert(tw<=108);assert(caption->text.substr(caption->text.size()-3)==L"...");
+ icon->ConfigureCaption(14,"Prop",true,10,11,12);assert(!caption->visible);
+ icon->ConfigureCaption(14,"Grenade",false,0,0,0);root.Render();assert(caption->visible&&caption->color.r==40);
+ icon->LoadImage("fixture");delete icon;root.children.clear();assert(vgui::surface()->destroyed.size()==1&&vgui::surface()->destroyed[0]==42);
+ puts("PASS: production card panel; local native caption, 14px footer, initial layout, scroll/resize, stale 3D state, long names, pool reuse and owned texture cleanup");
+}

@@ -1192,35 +1192,10 @@ public:
 
     void PostChildPaint() override
     {
-        if(!m_OverlaysLoaded){
-            m_OverlaysLoaded=true;
-            m_OverlayNormal=GMP_LoadPNGTexture("materials/gui/ContentIcon-normal.png");
-            m_OverlayHover=GMP_LoadPNGTexture("materials/gui/ContentIcon-hovered.png");
-            m_PropHover=GMP_LoadPNGTexture("materials/gui/sm_hover.png");
-        }
-        int mx,my;vgui::input()->GetCursorPos(mx,my);ScreenToLocal(mx,my);
         for(int i=0;m_pItems&&i<m_Places.Count();++i){
             const Place &p=m_Places[i];const GMPSpawnItem &item=(*m_pItems)[p.item];
             if(item.model.IsEmpty()||!IsShown(p,GetTall()))continue;
             const int y=p.y-m_nScroll;
-            const bool hover=mx>=p.x&&mx<p.x+p.w&&my>=y&&my<y+p.h;
-            const bool prop=!Q_strnicmp(item.command.Get(),"gmp_spawn ",10);
-            const int texture=prop?(hover?m_PropHover:0):(hover?m_OverlayHover:m_OverlayNormal);
-            vgui::surface()->DrawSetColor(255,255,255,255);vgui::surface()->DrawSetTexture(texture);
-            if(prop&&texture){
-                // Original GWEN source rect (4,4,56,56), 5px border in a 64px atlas.
-                int x[]={p.x,p.x+5,p.x+p.w-5,p.x+p.w},ys[]={y,y+5,y+p.h-5,y+p.h};
-                float uv[]={4.f/64,9.f/64,55.f/64,60.f/64};
-                for(int row=0;row<3;++row)for(int col=0;col<3;++col)
-                    vgui::surface()->DrawTexturedSubRect(x[col],ys[row],x[col+1],ys[row+1],uv[col],uv[row],uv[col+1],uv[row+1]);
-            }else if(!prop&&texture){
-                vgui::surface()->DrawTexturedRect(p.x,y,p.x+p.w,y+p.h);
-            }
-            if(!prop&&!item.text.IsEmpty()){
-                const int tall=vgui::surface()->GetFontTall(m_hFont);
-                // One final label pass, inside the card; no legacy strip underneath.
-                DrawText(m_hFont,p.x+5,y+p.h-tall-9,p.w-10,tall,item.text.Get(),texture?Color(255,255,255,255):Color(40,40,40,255),true);
-            }
             // Keep native save/delete controls above the decorative original overlay.
             if(!item.file.IsEmpty()){
                 int size=DeleteSize(p);vgui::surface()->DrawSetColor(200,70,60,255);
@@ -1265,6 +1240,12 @@ private:
 	{
 		if ( !m_pItems )
 			return;
+        if(!m_OverlaysLoaded){
+            m_OverlaysLoaded=true;
+            m_OverlayNormal=GMP_LoadPNGTexture("materials/gui/ContentIcon-normal.png");
+            m_OverlayHover=GMP_LoadPNGTexture("materials/gui/ContentIcon-hovered.png");
+            m_PropHover=GMP_LoadPNGTexture("materials/gui/sm_hover.png");
+        }
 		const int h = GetTall();
 		// Free the cells whose item scrolled out.
 		for ( int c = 0; c < m_Cells.Count(); c++ )
@@ -1293,10 +1274,10 @@ private:
 				m_Cells[c].item = place.item;
 				place.missing = !LoadIcon( m_Cells[c].panel, ( *m_pItems )[place.item] );
 			}
-            const bool prop=!Q_strnicmp((*m_pItems)[place.item].command.Get(),"gmp_spawn ",10);
-            const int inset=prop?0:4; // Original SpawnIcon fills its cell; ContentIcon image is inset.
-			const int topTall = ( *m_pItems )[place.item].file.IsEmpty() ? 0 : DeleteSize( place );
-			m_Cells[c].panel->SetBounds( place.x + inset, place.y - m_nScroll + inset + topTall, place.w - 2 * inset, place.h - 2 * inset - topTall );
+            const GMPSpawnItem &item=(*m_pItems)[place.item];
+            const bool prop=!Q_strnicmp(item.command.Get(),"gmp_spawn ",10);
+            m_Cells[c].panel->SetBounds(place.x,place.y-m_nScroll,place.w,place.h);
+            m_Cells[c].panel->ConfigureCaption(m_hFont,item.text.Get(),prop,m_OverlayNormal,m_OverlayHover,m_PropHover);
 			m_Cells[c].panel->SetVisible( !place.missing );
 		}
 		for ( int c = 0; c < m_Cells.Count(); c++ )
@@ -1436,7 +1417,7 @@ public:
 		m_hTabFont = MakeFont( family, MAX(12,tall / 55), 500,m_hTabFont );
 		m_hListFont = MakeFont( family, MAX(12,tall / 50), 500,m_hListFont );
 		m_hHeaderFont = MakeFont( family, MAX(14,tall / 42), 700,m_hHeaderFont );
-		m_hLabelFont = MakeFont( family, MAX(12,tall / 50), 500,m_hLabelFont );
+		m_hLabelFont = MakeFont( family, GMP_CONTENT_CAPTION_FONT_TALL, 500,m_hLabelFont );
 		m_pLists->SetFonts( m_hListFont, m_hTabFont );
 		m_pGrid->SetFonts( m_hLabelFont, m_hHeaderFont );
         m_pTools->SetFont(m_hListFont);m_pSearch->SetFont(m_hListFont);
