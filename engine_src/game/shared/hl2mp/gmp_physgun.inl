@@ -1269,7 +1269,7 @@ private:
 
 	static bool LoadIcon( CGMPSpawnIconPanel *panel, const GMPSpawnItem &item )
     {
-        panel->ClearImage();
+        panel->ClearImage();panel->SetMDL(MDLHANDLE_INVALID);
         if(!item.icon.IsEmpty()&&!strstr(item.icon.Get(),"..")){
             char path[MAX_PATH];Q_snprintf(path,sizeof(path),"materials/%s",item.icon.Get());
             if(panel->LoadImage(path))return true;

@@ -1246,7 +1246,7 @@ void CWeaponGMPToolGun::Redraw( void )
 
 
     static vgui::HFont fonts[3]={0,0,0};
-    static int fontHeight=0, gradient=0;
+    static int fontHeight=0;
     const float scale=ScreenHeight()/1080.0f;
     if(fontHeight!=ScreenHeight()){
         const int sizes[]={80,24,17};
@@ -1259,17 +1259,17 @@ void CWeaponGMPToolGun::Redraw( void )
         }
         fontHeight=ScreenHeight();
     }
-    if(!gradient){gradient=vgui::surface()->CreateNewTextureID();vgui::surface()->DrawSetTextureFile(gradient,"gui/gradient",1,false);}
+    const int gradient=s_GMPToolScreenSystem.Gradient();
     const GMPToolDef &def=s_GMPToolDefs[tool];
     const char *left=def.left;
     if(m_iStage==1&&def.left1)left=def.left1;
     else if(m_iStage==2&&def.left2)left=def.left2;
     else if(m_iStage>=3)left="Select an object to finish the Pulley constraint";
-    char lines[3][256];int count=0;
-    if(left)Q_snprintf(lines[count++],sizeof(lines[0]),"%s",left);
-    if(def.right&&(m_iStage==0||!Q_stricmp(def.mode,"rope")))Q_snprintf(lines[count++],sizeof(lines[0]),"%s",def.right);
-    else if(m_iStage>0)Q_snprintf(lines[count++],sizeof(lines[0]),"Cancel");
-    if(def.reload)Q_snprintf(lines[count++],sizeof(lines[0]),"%s",def.reload);
+    char lines[3][256];int count=0,buttons[3]={0,0,0};
+    if(left){buttons[count]=0;Q_snprintf(lines[count++],sizeof(lines[0]),"%s",left);}
+    if(def.right&&(m_iStage==0||!Q_stricmp(def.mode,"rope"))){buttons[count]=1;Q_snprintf(lines[count++],sizeof(lines[0]),"%s",def.right);}
+    else if(m_iStage>0){buttons[count]=1;Q_snprintf(lines[count++],sizeof(lines[0]),"Cancel");}
+    if(def.reload){buttons[count]=2;Q_snprintf(lines[count++],sizeof(lines[0]),"%s",def.reload);}
     char key[128];Q_snprintf(key,sizeof(key),"#tool.%s.name",def.mode);
     const char *name=GMP_ToolPhrase(key);if(name==key)name=def.name;
     wchar_t title[256],description[512];g_pVGuiLocalize->ConvertANSIToUnicode(name,title,sizeof(title));
@@ -1287,12 +1287,18 @@ void CWeaponGMPToolGun::Redraw( void )
     vgui::surface()->DrawTexturedRect(0,y-pad,int(600*scale),helpY);
     text(fonts[0],x,y,title,MAX(1,int(2*scale)));text(fonts[1],x,y+titleH,description,1);
     vgui::surface()->DrawSetColor(10,10,10,230);vgui::surface()->DrawTexturedRect(0,helpY,int(600*scale),helpY+helpH*count+pad);
-    const char *buttons[]={"LMB","RMB","R"};
+    const char *buttonNames[]={"LMB","RMB","R"};
     for(int i=0;i<count;++i){
         wchar_t wide[256];g_pVGuiLocalize->ConvertANSIToUnicode(lines[i],wide,sizeof(wide));
         text(fonts[2],x+int(32*scale),helpY+pad/2+i*helpH,wide,1);
-        wchar_t button[8];const char *label=(i==count-1&&def.reload)?"R":buttons[MIN(i,2)];
-        g_pVGuiLocalize->ConvertANSIToUnicode(label,button,sizeof(button));text(fonts[2],x,helpY+pad/2+i*helpH,button,1);
+        int texture=s_GMPToolScreenSystem.ButtonIcon(buttons[i]);
+        if(texture){
+            const int iy=helpY+pad/2+i*helpH,iw=MAX(1,int(20*scale));
+            vgui::surface()->DrawSetColor(255,255,255,255);vgui::surface()->DrawSetTexture(texture);
+            vgui::surface()->DrawTexturedRect(x,iy,x+iw,iy+iw);
+        }else{
+            wchar_t button[8];g_pVGuiLocalize->ConvertANSIToUnicode(buttonNames[buttons[i]],button,sizeof(button));text(fonts[2],x,helpY+pad/2+i*helpH,button,1);
+        }
     }
 
 }

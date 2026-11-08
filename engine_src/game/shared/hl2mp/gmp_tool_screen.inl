@@ -94,10 +94,22 @@ private:
 class CGMPToolScreenSystem : public CAutoGameSystemPerFrame
 {
 public:
-    CGMPToolScreenSystem():CAutoGameSystemPerFrame("GModToolgunScreen"),m_Panel(NULL),m_Attempted(false){}
+    CGMPToolScreenSystem():CAutoGameSystemPerFrame("GModToolgunScreen"),m_Panel(NULL),m_Attempted(false),m_IconsAttempted(false),m_Gradient(0){for(int i=0;i<3;++i)m_Icons[i]=0;}
     void LevelInitPostEntity() override {
         s_GMPToolLanguage.clear();GMP_LoadToolLanguage("en");ConVarRef lang("gmod_language");
         if(lang.IsValid()&&Q_strcmp(lang.GetString(),"en")&&!strstr(lang.GetString(),"..")&&!strchr(lang.GetString(),'/'))GMP_LoadToolLanguage(lang.GetString());
+    }
+    int Gradient(){
+        if(!m_Gradient){m_Gradient=vgui::surface()->CreateNewTextureID();vgui::surface()->DrawSetTextureFile(m_Gradient,"gui/gradient",1,false);}
+        return m_Gradient;
+    }
+    int ButtonIcon(int index){
+        if(!m_IconsAttempted){
+            m_IconsAttempted=true;
+            const char *paths[]={"materials/gui/lmb.png","materials/gui/rmb.png","materials/gui/r.png"};
+            for(int i=0;i<3;++i)m_Icons[i]=GMP_LoadPNGTexture(paths[i]);
+        }
+        return index>=0&&index<3?m_Icons[index]:0;
     }
     void Shutdown() override {Release();}
     void LevelShutdownPostEntity() override {Release();}
@@ -134,7 +146,11 @@ private:
         if(m_Material.IsValid()&&m_Original.IsValid()){bool found=false;IMaterialVar *base=m_Material->FindVar("$basetexture",&found,false);if(found)base->SetTextureValue(m_Original);}
         delete m_Panel;m_Panel=NULL;m_Target.Shutdown();m_Original.Shutdown();m_Material.Shutdown();
     }
-    void Release(){ReleaseResources();m_Attempted=false;s_GMPToolLanguage.clear();}
-    CGMPToolScreenPanel *m_Panel;bool m_Attempted;CMaterialReference m_Material;CTextureReference m_Target,m_Original;
+    void Release(){
+        ReleaseResources();m_Attempted=false;s_GMPToolLanguage.clear();
+        for(int i=0;i<3;++i){if(m_Icons[i])vgui::surface()->DestroyTextureID(m_Icons[i]);m_Icons[i]=0;}m_IconsAttempted=false;
+        if(m_Gradient)vgui::surface()->DestroyTextureID(m_Gradient);m_Gradient=0;
+    }
+    CGMPToolScreenPanel *m_Panel;bool m_Attempted,m_IconsAttempted;int m_Icons[3],m_Gradient;CMaterialReference m_Material;CTextureReference m_Target,m_Original;
 };
 static CGMPToolScreenSystem s_GMPToolScreenSystem;
