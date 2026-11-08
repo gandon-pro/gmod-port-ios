@@ -1083,7 +1083,7 @@ class CGMPSpawnGrid : public CGMPDragPanel
 {
 	DECLARE_CLASS_SIMPLE( CGMPSpawnGrid, CGMPDragPanel );
 public:
-	CGMPSpawnGrid( vgui::Panel *parent ) : BaseClass( parent, "SpawnGrid" ), m_pItems( NULL ), m_hFont( 0 ), m_hHeaderFont( 0 ),m_OverlayNormal(0),m_OverlayHover(0),m_PropHover(0),m_OverlaysLoaded(false) {}
+	CGMPSpawnGrid( vgui::Panel *parent ) : BaseClass( parent, "SpawnGrid" ), m_pItems( NULL ), m_hFont( 0 ), m_hHeaderFont( 0 ),m_OverlayNormal(0),m_OverlayHover(0),m_PropHover(0),m_OverlaysLoaded(false) {SetPostChildPaintEnabled(true);}
     ~CGMPSpawnGrid(){for(int texture:{m_OverlayNormal,m_OverlayHover,m_PropHover})if(texture)vgui::surface()->DestroyTextureID(texture);}
 
 	void SetFonts( vgui::HFont font, vgui::HFont header ) { m_hFont = font; m_hHeaderFont = header; InvalidateLayout(); }
@@ -1194,7 +1194,7 @@ public:
 		}
 	}
 
-    void PaintOver() override
+    void PostChildPaint() override
     {
         if(!m_OverlaysLoaded){
             m_OverlaysLoaded=true;
